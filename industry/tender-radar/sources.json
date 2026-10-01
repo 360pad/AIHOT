@@ -1,0 +1,12 @@
+[
+  {
+    "name": "中国政府采购网",
+    "type": "government_procurement",
+    "stage": ["采购意向", "采购公告", "中标公告"]
+  },
+  {
+    "name": "全国公共资源交易平台",
+    "type": "public_resource",
+    "stage": ["招标计划", "招标公告", "中标公告"]
+  }
+]
