@@ -481,6 +481,76 @@
       "tags": ["官方协会", "安徽", "招标采购", "政府采购", "公共资源交易"],
       "site_fulltext": false,
       "syndicate_fulltext": false
+    },
+    {
+      "id": "json-anhui-ccgp-intent",
+      "name": "安徽政府采购网·采购意向公开",
+      "kind": "json_list",
+      "config": {
+        "url": "https://www.ccgp-anhui.gov.cn/portal/category",
+        "method": "POST",
+        "headers": { "x-requested-with": "XMLHttpRequest" },
+        "bodyJson": {
+          "pageNo": 1,
+          "pageSize": 20,
+          "categoryCode": "ZcyAnnouncement1",
+          "districtCode": ["340000"],
+          "leaf": "0"
+        },
+        "itemsPath": "result.data.data",
+        "titlePaths": ["title"],
+        "authorPaths": ["author"],
+        "publishedAtPath": "publishDate",
+        "publishedAtUnit": "epoch_ms",
+        "externalIdPath": "articleId",
+        "urlTemplate": "https://www.ccgp-anhui.gov.cn/site/detail?parentId=oJCosldFbaJFzmyFhz1c6Q%3D%3D&articleId={articleId}",
+        "allowUrlPrefixes": ["https://www.ccgp-anhui.gov.cn/site/detail"],
+        "sortByPublishedAt": true,
+        "_aihot": { "initialBackfillLimit": 20 }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": ["官方", "安徽", "政府采购", "采购意向"],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "json-anhui-ccgp-notices",
+      "name": "安徽政府采购网·采购公告",
+      "kind": "json_list",
+      "config": {
+        "url": "https://www.ccgp-anhui.gov.cn/portal/category",
+        "method": "POST",
+        "headers": { "x-requested-with": "XMLHttpRequest" },
+        "bodyJson": {
+          "pageNo": 1,
+          "pageSize": 20,
+          "categoryCode": "ZcyAnnouncement2",
+          "districtCode": ["340000"],
+          "leaf": "0"
+        },
+        "itemsPath": "result.data.data",
+        "titlePaths": ["title"],
+        "authorPaths": ["author"],
+        "publishedAtPath": "publishDate",
+        "publishedAtUnit": "epoch_ms",
+        "externalIdPath": "articleId",
+        "urlTemplate": "https://www.ccgp-anhui.gov.cn/site/detail?parentId=oJCosldFbaJFzmyFhz1c6Q%3D%3D&articleId={articleId}",
+        "allowUrlPrefixes": ["https://www.ccgp-anhui.gov.cn/site/detail"],
+        "sortByPublishedAt": true,
+        "_aihot": { "initialBackfillLimit": 20 }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": ["官方", "安徽", "政府采购", "采购公告"],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
     }
   ]
 }
