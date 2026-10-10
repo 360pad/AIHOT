@@ -144,10 +144,17 @@ export async function fetchJsonList(source: SourceRow): Promise<Candidate[]> {
     const token = credential("collectors", "GITHUB_TOKEN");
     if (token) headers.authorization = `Bearer ${token}`;
   }
+  const formBody = c.bodyForm
+    ? new URLSearchParams(Object.entries(c.bodyForm).map(([key, value]) => [key, String(value)])).toString()
+    : undefined;
   const res = await guardedFetch(url, {
     method: c.method ?? "GET",
-    headers: c.bodyJson ? { ...headers, "content-type": "application/json" } : headers,
-    body: c.bodyJson ? JSON.stringify(c.bodyJson) : undefined,
+    headers: c.bodyJson
+      ? { ...headers, "content-type": "application/json" }
+      : c.bodyForm
+        ? { ...headers, "content-type": "application/x-www-form-urlencoded; charset=UTF-8" }
+        : headers,
+    body: c.bodyJson ? JSON.stringify(c.bodyJson) : formBody,
     timeoutMs: 25_000,
   });
   if (res.status !== 200) throw new FetchError(`HTTP ${res.status}`, res.status);

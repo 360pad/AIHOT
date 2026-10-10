@@ -2,7 +2,7 @@ export const SITE = {
   name: "Tender Radar",
   subject: "招投标商机",
   homeTitle: "Tender Radar — 数字化项目商机雷达",
-  description: "聚合公开采购意向、招标计划、招标公告与结果公示，借助 AI 识别智慧水利、数字政府、数字矿山、数字建筑和 GIS 测绘项目机会。",
+  description: "聚合公开采购意向、招标计划、招标公告与结果公示，借助 AI 识别智慧水利、工程与矿山测量、档案数字化、数字政府、数字建筑和 GIS 测绘项目机会。",
   tagline: "从公开项目线索中发现值得跟进的数字化商机",
   locale: "zh-CN",
   defaultUrl: "http://localhost:3000",

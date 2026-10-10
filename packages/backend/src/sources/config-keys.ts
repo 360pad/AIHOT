@@ -13,7 +13,7 @@ const KEYS: Record<SourceRow["kind"], string[]> = {
     "itemSelector", "linkSelector", "titleSelector", "publishedAtSelector", "publishedAtRegex", "publishedAtUtcOffset",
   ],
   json_list: [
-    ...COLLECTED, "url", "mode", "method", "headers", "bodyJson", "jsonKey", "windowVar", "itemsPath", "itemsObjectValues",
+    ...COLLECTED, "url", "mode", "method", "headers", "bodyJson", "bodyForm", "jsonKey", "windowVar", "itemsPath", "itemsObjectValues",
     "titlePaths", "summaryPaths", "summaryIsBody", "authorPaths", "publishedAtPath", "publishedAtUnit", "publishedAtUtcOffset", "externalIdPath",
     "urlTemplate", "urlTemplateFallback", "rawDropKeys", "requireBoolean", "minNumeric",
   ],
@@ -23,7 +23,7 @@ const KEYS: Record<SourceRow["kind"], string[]> = {
   external: [],
 };
 
-// Objects with fixed keys (headers and bodyJson are request data, free-form).
+// Objects with fixed keys (headers and request bodies are request data, free-form).
 const NESTED: Record<string, string[]> = {
   _aihot: ["initialBackfillLimit", "initialBackfillMonths", "maxAgeDays"],
   ingestNoiseFilter: ["dropMarkers", "dropMarkersTitleOnly", "keepIfMatches"],

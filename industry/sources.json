@@ -185,6 +185,82 @@
       "syndicate_fulltext": false
     },
     {
+      "id": "json-masy-ggzy-limited-tenders",
+      "name": "马鞍山小马易采·限额以下招标公告",
+      "kind": "json_list",
+      "config": {
+        "url": "http://www.masygjy.com/XZEpointWebBuilder/rest/secaction/getSecInfoListYzmygjy",
+        "method": "POST",
+        "headers": { "user-agent": "Mozilla/5.0" },
+        "bodyForm": {
+          "siteGuid": "3a507ad4-f2ac-473c-845d-e69c560629c1",
+          "categoryNum": "001002001",
+          "content": "",
+          "pageIndex": 0,
+          "pageSize": 18,
+          "YZM": "",
+          "ImgGuid": "",
+          "startdate": "",
+          "enddate": ""
+        },
+        "itemsPath": "custom.infodata",
+        "titlePaths": ["title"],
+        "publishedAtPath": "infodate",
+        "publishedAtUtcOffset": "+08:00",
+        "externalIdPath": "infoid",
+        "urlTemplate": "http://www.masygjy.com{infourl}",
+        "allowUrlPrefixes": ["http://www.masygjy.com/jyxx/001002/001002001/"],
+        "sortByPublishedAt": true,
+        "_aihot": { "initialBackfillLimit": 18, "maxAgeDays": 30 }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": ["官方平台", "安徽", "马鞍山", "公共资源交易", "招标公告"],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "json-masy-ggzy-limited-awards",
+      "name": "马鞍山小马易采·限额以下中标公示",
+      "kind": "json_list",
+      "config": {
+        "url": "http://www.masygjy.com/XZEpointWebBuilder/rest/secaction/getSecInfoListYzmygjy",
+        "method": "POST",
+        "headers": { "user-agent": "Mozilla/5.0" },
+        "bodyForm": {
+          "siteGuid": "3a507ad4-f2ac-473c-845d-e69c560629c1",
+          "categoryNum": "001002004",
+          "content": "",
+          "pageIndex": 0,
+          "pageSize": 18,
+          "YZM": "",
+          "ImgGuid": "",
+          "startdate": "",
+          "enddate": ""
+        },
+        "itemsPath": "custom.infodata",
+        "titlePaths": ["title"],
+        "publishedAtPath": "infodate",
+        "publishedAtUtcOffset": "+08:00",
+        "externalIdPath": "infoid",
+        "urlTemplate": "http://www.masygjy.com{infourl}",
+        "allowUrlPrefixes": ["http://www.masygjy.com/jyxx/001002/001002004/"],
+        "sortByPublishedAt": true,
+        "_aihot": { "initialBackfillLimit": 18, "maxAgeDays": 30 }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": ["官方平台", "安徽", "马鞍山", "公共资源交易", "中标及结果"],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
       "id": "web-anhui-huaibei-ggzy",
       "name": "淮北市公共资源交易中心·交易公告",
       "kind": "web_list",
@@ -735,7 +811,7 @@
         "headers": { "x-requested-with": "XMLHttpRequest" },
         "bodyJson": {
           "pageNo": 1,
-          "pageSize": 20,
+          "pageSize": 100,
           "categoryCode": "ZcyAnnouncement1",
           "districtCode": ["340000"],
           "leaf": "0"
@@ -749,7 +825,7 @@
         "urlTemplate": "https://www.ccgp-anhui.gov.cn/site/detail?parentId=oJCosldFbaJFzmyFhz1c6Q%3D%3D&articleId={articleId}",
         "allowUrlPrefixes": ["https://www.ccgp-anhui.gov.cn/site/detail"],
         "sortByPublishedAt": true,
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "_aihot": { "initialBackfillLimit": 100, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -770,7 +846,7 @@
         "headers": { "x-requested-with": "XMLHttpRequest" },
         "bodyJson": {
           "pageNo": 1,
-          "pageSize": 20,
+          "pageSize": 100,
           "categoryCode": "ZcyAnnouncement2",
           "districtCode": ["340000"],
           "leaf": "0"
@@ -784,7 +860,7 @@
         "urlTemplate": "https://www.ccgp-anhui.gov.cn/site/detail?parentId=oJCosldFbaJFzmyFhz1c6Q%3D%3D&articleId={articleId}",
         "allowUrlPrefixes": ["https://www.ccgp-anhui.gov.cn/site/detail"],
         "sortByPublishedAt": true,
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "_aihot": { "initialBackfillLimit": 100, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
