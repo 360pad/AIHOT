@@ -1,6 +1,29 @@
 {
-  "$comment": "首次启动导入的已验证公开信源。全国公共资源交易平台首页为静态列表，选择器、链接前缀和日期字段已于 2026-10-10 核验；只展示摘要和原文链接。",
+  "$comment": "首次启动导入的已验证公开信源。中央政府采购网和全国公共资源交易平台的静态列表、选择器、链接前缀和日期字段已于 2026-10-10 核验；只展示摘要和原文链接。",
   "sources": [
+    {
+      "id": "web-ccgp-central-announcements",
+      "name": "中国政府采购网·中央公告",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.ccgp.gov.cn/cggg/zygg/index.htm",
+        "baseUrl": "https://www.ccgp.gov.cn/cggg/zygg/index.htm",
+        "itemSelector": "ul.c_list_bid > li",
+        "linkSelector": "a[href]",
+        "titleSelector": "a[href]",
+        "publishedAtRegex": "发布时间：\\s*(?:<em[^>]*>)?(\\d{4}-\\d{2}-\\d{2}(?:\\s+\\d{2}:\\d{2})?)",
+        "allowUrlPrefixes": ["https://www.ccgp.gov.cn/cggg/zygg/"],
+        "_aihot": { "initialBackfillLimit": 20 }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": ["官方", "政府采购", "中央公告"],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
     {
       "id": "web-ggzy-national-trading-notices",
       "name": "全国公共资源交易平台·交易公告",
