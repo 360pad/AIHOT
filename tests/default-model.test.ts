@@ -20,8 +20,8 @@ const provider = await stub((_hit, req) => {
   const user = String(body.messages.at(-1)!.content);
   seen.push({ model: body.model, system });
   const content =
-    system.includes("相关性预筛") ? { label: "PASS", reason: "测试" }
-    : system.includes("项目机会评分器") ? { attentionScore: 80 }
+    system.includes("项目机会评分器") ? { attentionScore: 80 }
+    : system.includes("相关性预筛") ? { label: "PASS", reason: "测试" }
     : system.includes("项目情报编辑") ? { itemType: "tender_notice", authorRole: "principal", tags: ["城市治理与数字政府", "招标公告"], editorialJudgment: "理由", titleZh: "一个数字化项目的标题", summaryZh: "一个数字化项目的摘要。第二句。" }
     : system.includes("资料结构化助手") ? { category: "digital-government", tags: ["城市治理与数字政府", "招标公告"], subjects: [], fact: null }
     : user.includes("title_zh") ? "title_zh: 标题\nsummary_zh: 摘要。"
