@@ -1,15 +1,14 @@
-// Tender Radar industry identity configuration
 export const SITE = {
   name: "Tender Radar",
-  subject: "招投标",
-  homeTitle: "Tender Radar — 招投标情报雷达 · 每日商机精选",
-  description: "自动追踪招标公告、采购需求、中标信息与行业动态，通过 AI 聚合分析，帮助企业发现项目机会与竞争情报。",
-  tagline: "发现值得跟进的项目机会",
+  subject: "招投标商机",
+  homeTitle: "Tender Radar — 数字化项目商机雷达",
+  description: "聚合公开采购意向、招标计划、招标公告与结果公示，借助 AI 识别智慧水利、数字政府、数字矿山、数字建筑和 GIS 测绘项目机会。",
+  tagline: "从公开项目线索中发现值得跟进的数字化商机",
   locale: "zh-CN",
   defaultUrl: "http://localhost:3000",
   mcpPrefix: "tender_radar",
   contactEmail: null as string | null,
-  footerNote: "由 AIHOT 开源框架驱动",
+  footerNote: "基于公开信息聚合，仅供商机研判参考",
   icp: null as string | null,
   organization: {
     name: "Tender Radar",
@@ -20,15 +19,21 @@ export const SITE = {
 
 export const ABOUT = {
   kicker: `关于 ${SITE.name}`,
-  headline: ["每天都有新的项目机会，", "值得关注的只有关键几条。"] as [string, string],
-  lead: `${SITE.name} 自动追踪招投标信息：抓取、归并、分析、评分，每天生成企业关注的项目情报。`,
+  headline: ["每天都有新的公开项目，", "真正匹配业务的需要尽早发现。"] as [string, string],
+  lead: `${SITE.name} 聚合公开项目线索，按业务方向和项目阶段研判，帮助团队优先关注标前和招标中的数字化机会。`,
   steps: {
-    collect: "采集公开招标、采购公告、中标公告及行业信息源。",
-    store: "将同一项目的多来源信息聚合，形成完整项目画像。",
-    select: "模型分析项目价值、匹配程度、时间窗口与竞争情况。",
-    publish: "生成每日商机日报，帮助企业快速发现重点机会。",
+    collect: "采集公开交易平台中的招标公告、结果公示和政策项目线索。",
+    store: "将同一项目的公告、澄清和结果归并，保留其阶段演进。",
+    select: "模型按业务匹配、项目阶段、规模线索和可跟进性筛选重点机会。",
+    publish: "生成按业务方向归类的商机日报，方便团队优先研判。",
   },
-  maker: null as null,
+  maker: null as null | {
+    name: string;
+    greeting: string[];
+    avatarSourceId?: string | null;
+    wechat?: { title: string; note: string };
+    feishu?: { title: string; note: string };
+  },
   copyright: `${SITE.name} 是聚合摘要和阅读索引，原文版权归各来源所有。`,
 } as const;
 

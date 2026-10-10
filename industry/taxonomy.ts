@@ -1,70 +1,77 @@
-// Tender Radar industry taxonomy
-// 招投标情报行业分类、标签、主体词典
-
 export const CATEGORIES = [
-  { key: "tender-notice", label: "招标公告", section: "项目机会", guide: "公开招标、采购公告、资格预审和项目需求发布" },
-  { key: "award-notice", label: "中标公告", section: "项目动态", guide: "中标结果、成交公告、供应商信息和竞争格局" },
-  { key: "procurement", label: "采购需求", section: "采购情报", guide: "政府采购、企业采购、技术需求和预算信息" },
-  { key: "industry", label: "行业动态", section: "行业分析", guide: "政策、产业趋势、区域市场和行业变化" },
-  { key: "competitor", label: "竞争情报", section: "竞争分析", guide: "竞争企业、市场份额和投标动态" },
+  { key: "smart-water", label: "智慧水利", section: "业务机会", guide: "数字孪生流域、水旱灾害防御、河湖管理、水资源调度、水利工程监测、水务信息化等项目。" },
+  { key: "digital-government", label: "城市治理与数字政府", section: "业务机会", guide: "城市运行管理、市域和基层治理、综治中心、政务数据、政务服务、公共安全和数据治理项目。" },
+  { key: "digital-mining", label: "数字矿山", section: "业务机会", guide: "智能矿山、矿山安全生产、人员车辆定位、调度指挥、地质与生产数字化项目。" },
+  { key: "digital-construction", label: "数字建筑与智慧工地", section: "业务机会", guide: "智慧工地、BIM、工程项目管理、施工现场物联、质量安全和建筑数字化项目。" },
+  { key: "geospatial", label: "GIS与测绘地理信息", section: "业务机会", guide: "GIS 平台、时空大数据、测绘遥感、自然资源调查、实景三维和空间信息应用项目。" },
+  { key: "general", label: "综合商机", section: "其他线索", guide: "与上述方向暂不明确匹配、但可能属于企业数字化、信息化或行业项目机会的公开线索。" },
 ] as const;
 
 export const ITEM_TYPES = [
   "tender_notice",
-  "award_notice",
-  "procurement_demand",
-  "policy_update",
-  "competitor_signal",
+  "procurement_intention",
+  "tender_plan",
+  "pre_bid_notice",
+  "award_result",
+  "policy_market_signal",
 ] as const;
 
 export const CATEGORY_TAGS = [
-  "招标公告",
-  "中标公告",
-  "采购需求",
-  "政策监管",
-  "行业动态",
-  "竞争情报",
+  "智慧水利",
+  "城市治理与数字政府",
+  "数字矿山",
+  "数字建筑与智慧工地",
+  "GIS与测绘地理信息",
+  "综合商机",
 ] as const;
 
 export const TOPIC_TAGS = [
   "政府采购",
-  "企业采购",
-  "数字化项目",
-  "人工智能",
-  "信息化建设",
-  "区域市场",
-  "重点客户",
-  "供应商竞争",
+  "工程建设",
+  "采购意向",
+  "招标计划",
+  "标前信息",
+  "招标公告",
+  "中标及结果",
+  "项目预算",
+  "竞争格局",
 ] as const;
 
 export const ENTITY_TAGS = [
-  "招标单位",
   "采购单位",
+  "招标单位",
   "代理机构",
-  "供应商",
-  "竞争企业",
+  "中标供应商",
+  "联合体",
 ] as const;
 
 export const TAG_SYNONYMS: Readonly<Record<string, string>> = {
-  招标: "招标公告",
-  投标: "招标公告",
-  中标: "中标公告",
-  成交: "中标公告",
-  采购: "采购需求",
-  政府采购: "采购需求",
-  竞争对手: "竞争情报",
+  水利信息化: "智慧水利",
+  智慧水务: "智慧水利",
+  数字政府: "城市治理与数字政府",
+  社会治理: "城市治理与数字政府",
+  智慧城市: "城市治理与数字政府",
+  智慧矿山: "数字矿山",
+  智能矿山: "数字矿山",
+  智慧工地: "数字建筑与智慧工地",
+  数字建筑: "数字建筑与智慧工地",
+  测绘: "GIS与测绘地理信息",
+  地理信息: "GIS与测绘地理信息",
 };
 
 export const CATEGORY_BY_ITEM_TYPE: Readonly<Record<string, string>> = {
-  tender_notice: "招标公告",
-  award_notice: "中标公告",
-  procurement_demand: "采购需求",
-  policy_update: "行业动态",
-  competitor_signal: "竞争情报",
+  procurement_intention: "综合商机",
+  tender_plan: "综合商机",
+  pre_bid_notice: "综合商机",
+  tender_notice: "综合商机",
+  award_result: "综合商机",
+  policy_market_signal: "综合商机",
 };
 
 export const ENTITIES: Record<string, { name: string; displayTag: string | null; aliases: string[] }> = {};
 
 export const IDENTITY_LEXICON: ReadonlyArray<{ id: string; name: string; patterns: RegExp[] }> = [];
+
+export const IDENTITY_CONTEXT_ALIASES: ReadonlyArray<{ entityId: string; pattern: RegExp }> = [];
 
 export const PUBLISHER_DOMAINS: ReadonlyArray<{ entityId: string; domains: readonly string[] }> = [];
