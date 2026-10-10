@@ -39,7 +39,7 @@ export function renderTemplate(template: string, item: unknown): string | null {
   return missing ? null : out;
 }
 
-function toDate(v: unknown, unit: string | undefined): Date | null {
+function toDate(v: unknown, unit: string | undefined, utcOffset: string | undefined): Date | null {
   if (v === null || v === undefined || v === "") return null;
   if (unit === "epoch_ms") return new Date(Number(v));
   if (unit === "epoch_s") return new Date(Number(v) * 1000);
@@ -49,7 +49,15 @@ function toDate(v: unknown, unit: string | undefined): Date | null {
     const d = m ? new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00Z`) : null;
     return d && Number.isFinite(d.getTime()) && d.toISOString().startsWith(`${m![1]}-${m![2]}-${m![3]}`) ? d : null;
   }
-  const t = Date.parse(String(v));
+  const text = String(v).trim();
+  // Chinese procurement APIs commonly return local time without a zone. Honour the source's
+  // declared offset instead of letting Node interpret it as UTC (which makes fresh rows look future-dated).
+  if (utcOffset && /^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:[ T]\d{1,2}:\d{2}(?::\d{2})?)?$/.test(text)) {
+    const normalized = text.replace(/[/.]/g, "-").replace(" ", "T");
+    const withOffset = Date.parse(`${normalized}${utcOffset}`);
+    if (Number.isFinite(withOffset)) return new Date(withOffset);
+  }
+  const t = Date.parse(text);
   return Number.isFinite(t) ? new Date(t) : null;
 }
 
@@ -172,7 +180,7 @@ export async function fetchJsonList(source: SourceRow): Promise<Candidate[]> {
       url,
       title: collapseWhitespace(stripTags(title)),
       author: firstString(item, c.authorPaths),
-      publishedAt: toDate(getPath(item, c.publishedAtPath), c.publishedAtUnit),
+      publishedAt: toDate(getPath(item, c.publishedAtPath), c.publishedAtUnit, c.publishedAtUtcOffset),
       excerpt: summary ? collapseWhitespace(stripTags(summary)).slice(0, 2000) : null,
       bodyText: summaryIsBody ? stripTags(summary!) : null,
       bodyStatus: summaryIsBody ? "ok" : "pending",
