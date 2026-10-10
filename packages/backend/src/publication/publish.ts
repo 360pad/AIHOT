@@ -153,7 +153,8 @@ export async function publishArticleTx(tx: Tx, articleId: string, options: Publi
     FROM articles WHERE id = ${articleId} FOR UPDATE`;
   if (!article) return null;
   const [source] = await tx<SourceFacts[]>`
-    SELECT id, name, kind, tier, participation_mode, first_party, site_fulltext, syndicate_fulltext FROM sources WHERE id = ${article.source_id}`;
+    SELECT id, name, kind, tier, participation_mode, first_party, site_fulltext, syndicate_fulltext, config
+    FROM sources WHERE id = ${article.source_id}`;
   if (!source) return null;
   const [analysis] = await tx<AnalysisRow[]>`
     SELECT id, relevance, category, tags, subjects, title_zh, summary_zh, reason_zh, score, selected
@@ -179,9 +180,14 @@ export async function publishArticleTx(tx: Tx, articleId: string, options: Publi
   const relevance = typeof f.relevance === "string" ? (f.relevance as string) : analysis?.relevance ?? null;
   const judgedSelected = typeof f.selected === "boolean" ? (f.selected as boolean) : analysis?.selected ?? null;
   // Material from an isolated source reaches no public surface at all: not even a detail page.
-  const visibility = source.participation_mode === "isolated" ? "withdrawn" : (override?.visibility ?? "public");
+  const maxAgeDays = Number(source.config?._aihot && typeof source.config._aihot === "object"
+    ? (source.config._aihot as Record<string, unknown>).maxAgeDays ?? 0
+    : 0);
+  const freshnessCutoff = maxAgeDays > 0 ? now.getTime() - maxAgeDays * 86_400_000 : null;
+  const stale = freshnessCutoff !== null && (article.published_at ?? article.discovered_at).getTime() < freshnessCutoff;
+  const visibility = stale || source.participation_mode === "isolated" ? "withdrawn" : (override?.visibility ?? "public");
 
-  const eligible = isPoolEligible({ participationMode: source.participation_mode, relevance, title, summary });
+  const eligible = !stale && isPoolEligible({ participationMode: source.participation_mode, relevance, title, summary });
   const selected = isSelectable(eligible, judgedSelected, source.tier);
   const reason = selected ? pickString(f.reason, analysis?.reason_zh ?? null) : null;
   const hasXPost = !!article.x_post;

@@ -155,8 +155,9 @@ async function upsertIn(db: Db, m: MaterialInput): Promise<MaterialResult> {
     return { articleId: newId, created: true, revised: false, backfill: t.backfill };
   }
 
-  const [existing] = await db<{ id: string; source_id: string; revision: number; content_hash: string | null; backfill: boolean; title: string; body_text: string | null; excerpt: string | null }[]>`
-    SELECT id, source_id, revision, content_hash, backfill, title, body_text, excerpt FROM articles WHERE identity_key = ${identityKey} FOR UPDATE`;
+  const [existing] = await db<{ id: string; source_id: string; revision: number; content_hash: string | null; backfill: boolean; published_at: Date | null; discovered_at: Date; title: string; body_text: string | null; excerpt: string | null }[]>`
+    SELECT id, source_id, revision, content_hash, backfill, published_at, discovered_at, title, body_text, excerpt
+    FROM articles WHERE identity_key = ${identityKey} FOR UPDATE`;
   await db`INSERT INTO article_discoveries (article_id, source_id, via, discovered_at)
            VALUES (${existing!.id}, ${m.sourceId}, ${m.via}, ${discoveredAt}) ON CONFLICT DO NOTHING`;
   const unchanged: MaterialResult = { articleId: existing!.id, created: false, revised: false, backfill: existing!.backfill };
@@ -164,6 +165,18 @@ async function upsertIn(db: Db, m: MaterialInput): Promise<MaterialResult> {
   // discovery only: its title and summary are its own rendering, and taking them made the article flip
   // between the two sources' versions on every fetch. Only the article's own source revises it.
   if (existing!.source_id !== m.sourceId) return unchanged;
+  // Date parsing can improve after an article was first stored (for example, a listing that only
+  // showed MM-DD was previously interpreted as a 2001 date). Refresh the timeline without creating
+  // a content revision so the corrected source time reaches the public projection and freshness gate.
+  const incomingPublished = m.publishedAt && Number.isFinite(m.publishedAt.getTime()) ? m.publishedAt : null;
+  if (incomingPublished && (!existing!.published_at || Math.abs(existing!.published_at.getTime() - incomingPublished.getTime()) > 60_000)) {
+    const corrected = decideTimeline(incomingPublished, existing!.discovered_at, m.backfill);
+    await db`UPDATE articles SET published_at = ${corrected.publishedAt}, published_at_claim = ${incomingPublished},
+      timeline_at = ${corrected.timelineAt}, backfill = ${corrected.backfill}, backfill_reason = ${corrected.backfillReason},
+      updated_at = now() WHERE id = ${existing!.id}`;
+    await db`UPDATE publications SET published_at = ${corrected.publishedAt}, timeline_at = ${corrected.timelineAt},
+      backfill = ${corrected.backfill}, updated_at = now() WHERE article_id = ${existing!.id}`;
+  }
   // What the row will hold after this report: a listing without body keeps the stored (extracted) body.
   const bodyText = m.bodyText ?? existing!.body_text;
   const excerpt = m.excerpt ?? existing!.excerpt;

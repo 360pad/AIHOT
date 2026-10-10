@@ -126,6 +126,14 @@ export async function collectSource(sourceId: string, opts: { force?: boolean } 
     candidates = candidates.filter((c) => allowed(c.url, source)).map((c) => rewriteUrl(c, source)).filter((c) => !noiseFiltered(c, source));
     if (source.config.sortByPublishedAt) candidates.sort((a, b) => (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0));
 
+    const maxAgeDays = Number(source.config._aihot?.maxAgeDays ?? 0);
+    const freshnessCutoff = maxAgeDays > 0 ? Date.now() - maxAgeDays * DAY_MS : null;
+    if (freshnessCutoff !== null) {
+      // Tender Radar is a live opportunity feed: once a source gives us a trustworthy date,
+      // do not import an already-expired listing merely because the site still shows it.
+      candidates = candidates.filter((c) => !c.publishedAt || c.publishedAt.getTime() >= freshnessCutoff);
+    }
+
     // First import of a new source: bounded, and archived by source time (never "today", never pushed).
     const backfillLimit = Number(source.config._aihot?.initialBackfillLimit ?? 30);
     const backfillMonths = Number(source.config._aihot?.initialBackfillMonths ?? 12);
@@ -180,6 +188,16 @@ export async function collectSource(sourceId: string, opts: { force?: boolean } 
     }
 
     ({ created, revised } = await store(sourceId, candidates, firstImport ? "first-import" : null));
+
+    if (freshnessCutoff !== null) {
+      // Existing rows age out too. Keep the article for audit/history, but remove it from the
+      // public pool and from精选 once it leaves the configured live window.
+      await sql`
+        UPDATE publications
+        SET visibility = 'withdrawn', eligible = false, selected = false
+        WHERE source_id = ${sourceId} AND visibility = 'public'
+          AND coalesce(published_at, discovered_at) < ${new Date(freshnessCutoff)}`;
+    }
 
     if (firstImport) nextCursor.initializedAt = new Date().toISOString();
     nextCursor.lastOkAt = new Date().toISOString();

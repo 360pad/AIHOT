@@ -38,6 +38,7 @@
 - `parseMode`：`html`（默认，用选择器）、`markdown`（经 Jina 渲染后按 Markdown 读）、`docusaurus_changelog`。
 - `detail`：列表缺日期、标题或摘要时抓详情页补齐（`publishedAtSelector`、`titleSelector`、`summarySelector` 等）。
 - `allowUrlPrefixes` / `denyUrlPrefixes`：只收某些路径下的文章。
+- `_aihot.maxAgeDays`：对需要实时跟进的行业信源设置原文时间窗口；超过窗口的条目不再导入，已有公开条目会保留在数据库但撤出公开动态和精选。
 
 ### x_search
 

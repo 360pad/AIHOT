@@ -23,6 +23,21 @@ export function parseLooseDate(value: string | null | undefined, utcOffset = "+0
     const t = Date.parse(iso);
     return Number.isFinite(t) ? new Date(t) : null;
   }
+  // Many Chinese public-resource listings show only MM-DD. Date.parse treats those as
+  // dates in 2001, which makes a current tender look like ancient history. Infer the
+  // current source year, rolling back one year only when the inferred date is in the future.
+  const md = /^(\d{1,2})[-/.](\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(v);
+  if (md) {
+    const now = new Date();
+    let year = now.getUTCFullYear();
+    const [, month, day, hour = "00", minute = "00", second = "00"] = md;
+    let t = Date.parse(`${year}-${month!.padStart(2, "0")}-${day!.padStart(2, "0")}T${hour.padStart(2, "0")}:${minute}:${second}${utcOffset}`);
+    if (Number.isFinite(t) && t > Date.now() + 2 * 86_400_000) {
+      year -= 1;
+      t = Date.parse(`${year}-${month!.padStart(2, "0")}-${day!.padStart(2, "0")}T${hour.padStart(2, "0")}:${minute}:${second}${utcOffset}`);
+    }
+    return Number.isFinite(t) ? new Date(t) : null;
+  }
   // "Sep 26, 2026"
   const en = Date.parse(v.replace(/(\d)(st|nd|rd|th)/, "$1"));
   return Number.isFinite(en) ? new Date(en) : null;

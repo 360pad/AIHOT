@@ -13,7 +13,7 @@
         "titleSelector": "a[href]",
         "publishedAtRegex": "发布时间：\\s*(?:<em[^>]*>)?(\\d{4}-\\d{2}-\\d{2}(?:\\s+\\d{2}:\\d{2})?)",
         "allowUrlPrefixes": ["https://www.ccgp.gov.cn/cggg/zygg/"],
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -36,7 +36,7 @@
         "titleSelector": "a[href]",
         "publishedAtSelector": "span",
         "allowUrlPrefixes": ["https://www.ggzy.gov.cn/information/deal/html/"],
-        "_aihot": { "initialBackfillLimit": 12 }
+        "_aihot": { "initialBackfillLimit": 12, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": false,
@@ -59,7 +59,7 @@
         "titleSelector": "a[href]",
         "publishedAtSelector": "span",
         "allowUrlPrefixes": ["https://www.ggzy.gov.cn/information/deal/html/"],
-        "_aihot": { "initialBackfillLimit": 12 }
+        "_aihot": { "initialBackfillLimit": 12, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": false,
@@ -82,7 +82,7 @@
         "titleSelector": "a.ewb-notice-data",
         "publishedAtSelector": "span.ewb-notice-date",
         "allowUrlPrefixes": ["https://ggzy.hefei.gov.cn/jyxx/002001/"],
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -105,7 +105,7 @@
         "urlTemplate": "https://whsggzy.wuhu.gov.cn/whjyzx/contentinfo?id={Id}&menuPath=/trading-info&activeTab={NoticeCategory}",
         "allowUrlPrefixes": ["https://whsggzy.wuhu.gov.cn/whjyzx/contentinfo"],
         "externalIdPath": "Id",
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -128,7 +128,7 @@
         "titleSelector": "span.txt",
         "publishedAtSelector": "span.date",
         "allowUrlPrefixes": ["https://ggzy.bengbu.gov.cn/jyxxgk/002001/"],
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -151,7 +151,7 @@
         "titleSelector": "a[title]",
         "publishedAtSelector": "span.time",
         "allowUrlPrefixes": ["https://jy.ggj.huainan.gov.cn/jyxx/"],
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -173,7 +173,7 @@
         "linkSelector": "a[href]",
         "titleSelector": "p.name",
         "allowUrlPrefixes": ["https://zbcg.mas.gov.cn/masggzynew/jyxx/"],
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -196,7 +196,7 @@
         "titleSelector": "a[href]",
         "publishedAtSelector": "span.ewb-notice-time",
         "allowUrlPrefixes": ["https://ggzy.huaibei.gov.cn/bussinessInfo/"],
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -219,7 +219,7 @@
         "titleSelector": "span.content",
         "publishedAtSelector": "span.time",
         "allowUrlPrefixes": ["https://ggzyjyzx.tl.gov.cn/jyxx/"],
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -242,7 +242,7 @@
         "titleSelector": "a.text-overflow.new-item",
         "publishedAtSelector": "span.news-time",
         "allowUrlPrefixes": ["https://aqggzy.anqing.gov.cn/jyxx/003001/"],
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -265,7 +265,7 @@
         "titleSelector": "a[href]",
         "publishedAtSelector": "span.wb-data-date",
         "allowUrlPrefixes": ["https://ggzy.huangshan.gov.cn/017/"],
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -288,7 +288,7 @@
         "titleSelector": "a[href]",
         "publishedAtSelector": "span.ewb-notice-time",
         "allowUrlPrefixes": ["https://ggzy.chuzhou.gov.cn/bussinessInfo/"],
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -311,7 +311,7 @@
         "titleSelector": "span.title",
         "publishedAtSelector": "span.date",
         "allowUrlPrefixes": ["https://jyzx.fy.gov.cn/fuyang/jyxx/"],
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -334,7 +334,7 @@
         "titleSelector": "p.name",
         "publishedAtSelector": "span.date",
         "allowUrlPrefixes": ["https://ggzyjy.ahsz.gov.cn/jyxx/"],
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -357,7 +357,7 @@
         "titleSelector": "a.ewb-col-infor",
         "publishedAtSelector": "span.ewb-col-date",
         "allowUrlPrefixes": ["https://ggzy.luan.gov.cn/jyxxparentDetail.html"],
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -380,7 +380,7 @@
         "titleSelector": "a.deal-list-txt",
         "publishedAtSelector": "span.deal-list-date",
         "allowUrlPrefixes": ["https://ggzy.bozhou.gov.cn/jyxx/"],
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -402,7 +402,7 @@
         "linkSelector": "a[href]",
         "titleSelector": "a[href]",
         "allowUrlPrefixes": ["https://ggzyj.chizhou.gov.cn/Content/show/"],
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -425,7 +425,7 @@
         "titleSelector": "a.title",
         "publishedAtSelector": "span.date",
         "allowUrlPrefixes": ["https://ggzyjy.xuancheng.gov.cn/xcspfront/"],
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -448,7 +448,7 @@
         "titleSelector": "a[href*=\"/jiangsu/js_cggg/details.html\"]",
         "publishedAtSelector": "td:last-child",
         "allowUrlPrefixes": ["http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"],
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -471,7 +471,7 @@
         "titleSelector": "a[href*=\"/site/trade/affiche/detail/\"]",
         "publishedAtSelector": "span.fr",
         "allowUrlPrefixes": ["https://www.ahtba.org.cn/site/trade/affiche/detail/"],
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1_5",
       "first_party": false,
@@ -506,7 +506,7 @@
         "urlTemplate": "https://www.ccgp-anhui.gov.cn/site/detail?parentId=oJCosldFbaJFzmyFhz1c6Q%3D%3D&articleId={articleId}",
         "allowUrlPrefixes": ["https://www.ccgp-anhui.gov.cn/site/detail"],
         "sortByPublishedAt": true,
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -541,7 +541,7 @@
         "urlTemplate": "https://www.ccgp-anhui.gov.cn/site/detail?parentId=oJCosldFbaJFzmyFhz1c6Q%3D%3D&articleId={articleId}",
         "allowUrlPrefixes": ["https://www.ccgp-anhui.gov.cn/site/detail"],
         "sortByPublishedAt": true,
-        "_aihot": { "initialBackfillLimit": 20 }
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
