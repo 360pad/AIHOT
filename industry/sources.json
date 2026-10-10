@@ -435,6 +435,52 @@
       "tags": ["官方", "安徽", "宣城", "公共资源交易", "政府采购"],
       "site_fulltext": false,
       "syndicate_fulltext": false
+    },
+    {
+      "id": "web-jiangsu-ccgp-procurement",
+      "name": "江苏政府采购网·采购公告",
+      "kind": "web_list",
+      "config": {
+        "url": "http://www.ccgp-jiangsu.gov.cn/",
+        "baseUrl": "http://www.ccgp-jiangsu.gov.cn/",
+        "itemSelector": "div.content[data-key=\"cggg\"] table.notice_tableBox > tbody > tr",
+        "linkSelector": "a[href*=\"/jiangsu/js_cggg/details.html\"]",
+        "titleSelector": "a[href*=\"/jiangsu/js_cggg/details.html\"]",
+        "publishedAtSelector": "td:last-child",
+        "allowUrlPrefixes": ["http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"],
+        "_aihot": { "initialBackfillLimit": 20 }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": ["官方", "江苏", "政府采购", "采购公告"],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "web-anhui-tba-procurement",
+      "name": "安徽省招标投标信息网·依法招标采购",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.ahtba.org.cn/",
+        "baseUrl": "https://www.ahtba.org.cn/",
+        "itemSelector": "ul#lawTrade_A01 > li",
+        "linkSelector": "a[href*=\"/site/trade/affiche/detail/\"]",
+        "titleSelector": "a[href*=\"/site/trade/affiche/detail/\"]",
+        "publishedAtSelector": "span.fr",
+        "allowUrlPrefixes": ["https://www.ahtba.org.cn/site/trade/affiche/detail/"],
+        "_aihot": { "initialBackfillLimit": 20 }
+      },
+      "tier": "T1_5",
+      "first_party": false,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": ["官方协会", "安徽", "招标采购", "政府采购", "公共资源交易"],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
     }
   ]
 }
