@@ -46,6 +46,12 @@ function lines(value: string) {
   return value.split("\n").map((item) => item.trim()).filter(Boolean);
 }
 
+function nextCustomCapabilityId(capabilities: Capability[]) {
+  let number = 1;
+  while (capabilities.some((capability) => capability.id === `custom-capability-${number}`)) number += 1;
+  return `custom-capability-${number}`;
+}
+
 export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
   const { run, pending } = useAdminAction();
   const initial = useMemo(() => d.draftProfile?.profile ?? d.currentProfile?.profile ?? EMPTY, [d.currentProfile, d.draftProfile]);
@@ -68,6 +74,13 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
     setProfile((current) => ({ ...current, contexts: current.contexts.map((context, i) => i === index ? { ...context, ...patch } : context) }));
   }
 
+  function addCapability() {
+    const id = nextCustomCapabilityId(profile.capabilities);
+    const capability: Capability = { id, name: "新业务能力", enabled: false, priority: "常规", description: "请填写这项业务能力的服务范围、交付成果和排除边界。", serviceTerms: [], methodTerms: [], deliverableTerms: [], contextTerms: [], positiveExamples: [], negativeExamples: [], boundaries: [] };
+    setProfile((current) => ({ ...current, capabilities: [...current.capabilities, capability] }));
+    setActiveTab(id);
+  }
+
   async function saveDraft(reason: string) {
     return (await run("PUT", "/api/admin/business/profile/draft", { profile, expectedRevision: revision, reason }, { label: "business-draft", success: "业务配置草稿已保存" })) !== null;
   }
@@ -81,10 +94,11 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
   return (
     <AdminPage className="max-w-[1680px]" title="业务匹配" subtitle="用表单维护企业能力、测试语义判断并留下人工标注。草稿发布后才会成为新分析任务的配置。">
       <Card title="怎么使用" className="mb-5">
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <Step number="1" title="编辑能力" text="每行填写一个词或一个例子。行业只是背景，服务动作和交付成果才是主要判断依据。" />
           <Step number="2" title="保存草稿" text="先保存，系统会生成一个可回退的版本，不会立即改变正在运行的配置。" />
-          <Step number="3" title="发布并测试" text="确认表单内容后发布，再在下方粘贴公告标题和正文验证 PASS、BLOCK 或待确认。" />
+          <Step number="3" title="提交测试" text="用真实招标标题和正文测试刚保存的草稿，查看模型是否 PASS、BLOCK 或待确认。" />
+          <Step number="4" title="测试通过后发布" text="测试结果符合预期后，再发布当前草稿；有问题就继续修改、保存和测试。" />
         </div>
       </Card>
 
@@ -95,13 +109,13 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
             {profile.capabilities.map((capability) => <TabButton key={capability.id} active={activeTab === capability.id} onClick={() => setActiveTab(capability.id)}>{capability.name}</TabButton>)}
             <TabButton active={activeTab === "contexts"} onClick={() => setActiveTab("contexts")}>场景与说明</TabButton>
             <TabButton active={activeTab === "json"} onClick={() => setActiveTab("json")}>JSON 预览</TabButton>
+            <button type="button" onClick={addCapability} className="shrink-0 rounded-t-control px-4 py-2.5 text-[13px] font-medium text-accent transition-colors hover:bg-accent-soft">＋ 新建业务能力</button>
           </div>
 
           {activeTab === "json" ? <div className="rounded-card border border-line bg-bg-sunk p-3"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-[14px] font-semibold text-ink">当前表单生成的 JSON</h3><p className="mt-1 text-[12px] text-ink-4">只读预览，保存草稿时提交的就是这份内容。</p></div><Button size="sm" onClick={() => { void copyJson(); }}>{copied ? "已复制" : "复制 JSON"}</Button></div><pre className="max-h-[620px] overflow-auto rounded-control bg-surface p-3 text-[11.5px] leading-relaxed text-ink-2">{json}</pre></div> : activeTab === "contexts" ? <div className="space-y-4"><div><h3 className="text-[14px] font-semibold text-ink">业务场景背景</h3><p className="mt-1 text-[12px] text-ink-4">场景只作为上下文，不要把行业名称当成必须命中的业务关键词。</p></div><div className="space-y-3">{profile.contexts.map((context, index) => <div key={context.id} className="rounded-card border border-line bg-bg-sunk p-3"><div className="grid gap-3 sm:grid-cols-[180px_1fr]"><Field label="场景名称"><Input value={context.name} onChange={(e) => updateContext(index, { name: e.target.value })} /></Field><Field label="场景说明"><Input value={context.description} onChange={(e) => updateContext(index, { description: e.target.value })} /></Field></div><div className="mt-2 font-mono text-[11px] text-ink-4">场景 ID：{context.id}</div></div>)}</div><Field label="给模型的总体说明" hint="补充企业边界、优先关注的公告类型或需要人工复核的情况。"><Textarea className="min-h-[100px]" value={profile.notes} onChange={(e) => setProfile((current) => ({ ...current, notes: e.target.value }))} placeholder="例如：优先关注采购意向、招标公告、方案公示和中标信息；只出现硬件采购时通常不相关。" /></Field></div> : profile.capabilities.map((capability, index) => capability.id === activeTab && <CapabilityEditor key={capability.id} capability={capability} onChange={(patch) => updateCapability(index, patch)} />)}
           <div className="mt-3 flex flex-wrap gap-2">
             <ReasonDialog open={draftDialog} title="保存业务配置草稿" description="保存会生成不可变版本，但不会立即改变正在运行的业务分析。" confirmLabel="保存草稿" busy={pending === "business-draft"} onClose={() => setDraftDialog(false)} onSubmit={saveDraft} />
             <Button tone="primary" onClick={() => setDraftDialog(true)}>保存草稿</Button>
-            {d.draft && <Button busy={pending === "business-publish"} onClick={() => run("POST", "/api/admin/business/profile/publish", { versionId: d.draft!.versionId, expectedRevision: revision, reason: "管理员发布业务能力配置" }, { label: "business-publish", success: "业务配置已发布" })}>发布当前草稿</Button>}
           </div>
         </Card>
 
@@ -116,7 +130,8 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
         <p className="mb-3 text-[13px] text-ink-3">把人工收集到的真实招标标题和采购范围粘贴进来，用当前已发布版本测试模型是否识别为相关商机。</p>
         <div className="grid gap-3 lg:grid-cols-[1fr_1fr]"><Field label="公告标题"><Input value={testTitle} onChange={(e) => setTestTitle(e.target.value)} placeholder="例如：某水库库底高程测量服务" /></Field><Field label="使用配置版本"><Select value={profileVersionId} disabled><option value={profileVersionId}>{profileVersionId || "请先保存业务配置"}</option></Select></Field></div>
         <Field label="采购范围或正文"><Textarea className="mt-3 min-h-[160px]" value={testBody} onChange={(e) => setTestBody(e.target.value)} placeholder="粘贴采购需求、服务范围、成果要求等原文" /></Field>
-        <Button className="mt-3" tone="primary" disabled={!profileVersionId || !testTitle.trim()} busy={pending === "business-test"} onClick={() => run("POST", "/api/admin/business/tests", { profileVersionId, title: testTitle, body: testBody }, { label: "business-test", success: "测试已提交，等待分析任务处理" })}>提交测试</Button>
+        <div className="mt-3 flex flex-wrap items-center gap-2"><Button tone="primary" disabled={!profileVersionId || !testTitle.trim()} busy={pending === "business-test"} onClick={() => run("POST", "/api/admin/business/tests", { profileVersionId, title: testTitle, body: testBody }, { label: "business-test", success: "测试已提交，等待分析任务处理" })}>提交测试</Button>{d.draft && <Button busy={pending === "business-publish"} onClick={() => run("POST", "/api/admin/business/profile/publish", { versionId: d.draft!.versionId, expectedRevision: revision, reason: "管理员发布业务能力配置（已完成材料测试）" }, { label: "business-publish", success: "业务配置已发布" })}>测试通过后发布草稿</Button>}</div>
+        <p className="mt-2 text-[12px] text-ink-4">建议先提交测试并确认结果，再点击发布；测试不符合预期时不要发布，回到上方继续修改草稿。</p>
       </Card>
 
       <Card className="mt-5" title="测试结果与人工标注" pad={false}>
