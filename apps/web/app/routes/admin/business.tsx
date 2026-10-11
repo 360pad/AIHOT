@@ -1,5 +1,5 @@
 import { SITE } from "@aihot/industry/site";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { Route } from "./+types/business";
 import { adminGet } from "../../lib/admin.server";
 import { useAdminAction } from "../../features/admin/action";
@@ -52,6 +52,12 @@ function nextCustomCapabilityId(capabilities: Capability[]) {
   return `custom-capability-${number}`;
 }
 
+function nextCustomContextId(contexts: Profile["contexts"]) {
+  let number = 1;
+  while (contexts.some((context) => context.id === `custom-context-${number}`)) number += 1;
+  return `custom-context-${number}`;
+}
+
 export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
   const { run, pending } = useAdminAction();
   const initial = useMemo(() => d.draftProfile?.profile ?? d.currentProfile?.profile ?? EMPTY, [d.currentProfile, d.draftProfile]);
@@ -81,6 +87,13 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
     setActiveTab(id);
   }
 
+  function addContext() {
+    const id = nextCustomContextId(profile.contexts);
+    const context = { id, name: "新应用场景", description: "请填写该场景的采购方、项目对象或业务环境说明。" };
+    setProfile((current) => ({ ...current, contexts: [...current.contexts, context] }));
+    setActiveTab("contexts");
+  }
+
   async function saveDraft(reason: string) {
     return (await run("PUT", "/api/admin/business/profile/draft", { profile, expectedRevision: revision, reason }, { label: "business-draft", success: "业务配置草稿已保存" })) !== null;
   }
@@ -104,15 +117,20 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
         <Card title="企业能力配置" right={<span>草稿修订 {revision} · 当前 {d.current?.versionId ?? "未发布"}</span>}>
-          <p className="mb-4 text-[13px] leading-relaxed text-ink-3">请按业务能力填写，不需要编写 JSON。每项能力单独一个 Tab；列表输入框中每行一条。“正例”帮助模型理解什么值得关注，“反例”帮助模型排除只有设备、材料或泛化服务的项目。</p>
-          <div className="mb-4 flex gap-1 overflow-x-auto border-b border-line pb-px">
-            {profile.capabilities.map((capability) => <TabButton key={capability.id} active={activeTab === capability.id} onClick={() => setActiveTab(capability.id)}>{capability.name}</TabButton>)}
-            <TabButton active={activeTab === "contexts"} onClick={() => setActiveTab("contexts")}>场景与说明</TabButton>
-            <TabButton active={activeTab === "json"} onClick={() => setActiveTab("json")}>JSON 预览</TabButton>
-            <button type="button" onClick={addCapability} className="shrink-0 rounded-t-control px-4 py-2.5 text-[13px] font-medium text-accent transition-colors hover:bg-accent-soft">＋ 新建业务能力</button>
+          <p className="mb-4 text-[13px] leading-relaxed text-ink-3">这里分开维护两类信息：业务能力是“公司能做什么”，应用场景是“项目发生在哪里、服务谁”。大模型会同时使用两类信息，但场景不会替代业务能力判断。</p>
+          <div className="mb-4 space-y-3">
+            <TabGroup title="业务能力" hint="公司能提供什么服务和交付成果">
+              <div className="flex gap-1 overflow-x-auto pb-px">{profile.capabilities.map((capability) => <TabButton key={capability.id} active={activeTab === capability.id} onClick={() => setActiveTab(capability.id)}>{capability.name}</TabButton>)}<button type="button" onClick={addCapability} className="shrink-0 rounded-t-control px-4 py-2.5 text-[13px] font-medium text-accent transition-colors hover:bg-accent-soft">＋ 新建业务能力</button></div>
+            </TabGroup>
+            <TabGroup title="应用场景" hint="项目发生的行业、对象或业务环境">
+              <div className="flex gap-1 overflow-x-auto pb-px"><TabButton active={activeTab === "contexts"} onClick={() => setActiveTab("contexts")}>场景配置</TabButton><button type="button" onClick={addContext} className="shrink-0 rounded-t-control px-4 py-2.5 text-[13px] font-medium text-accent transition-colors hover:bg-accent-soft">＋ 新建应用场景</button></div>
+            </TabGroup>
+            <TabGroup title="查看与验证" hint="核对最终 JSON 或进行材料测试">
+              <div className="flex gap-1 overflow-x-auto pb-px"><TabButton active={activeTab === "json"} onClick={() => setActiveTab("json")}>JSON 预览</TabButton></div>
+            </TabGroup>
           </div>
 
-          {activeTab === "json" ? <div className="rounded-card border border-line bg-bg-sunk p-3"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-[14px] font-semibold text-ink">当前表单生成的 JSON</h3><p className="mt-1 text-[12px] text-ink-4">只读预览，保存草稿时提交的就是这份内容。</p></div><Button size="sm" onClick={() => { void copyJson(); }}>{copied ? "已复制" : "复制 JSON"}</Button></div><pre className="max-h-[620px] overflow-auto rounded-control bg-surface p-3 text-[11.5px] leading-relaxed text-ink-2">{json}</pre></div> : activeTab === "contexts" ? <div className="space-y-4"><div><h3 className="text-[14px] font-semibold text-ink">业务场景背景</h3><p className="mt-1 text-[12px] text-ink-4">场景只作为上下文，不要把行业名称当成必须命中的业务关键词。</p></div><div className="space-y-3">{profile.contexts.map((context, index) => <div key={context.id} className="rounded-card border border-line bg-bg-sunk p-3"><div className="grid gap-3 sm:grid-cols-[180px_1fr]"><Field label="场景名称"><Input value={context.name} onChange={(e) => updateContext(index, { name: e.target.value })} /></Field><Field label="场景说明"><Input value={context.description} onChange={(e) => updateContext(index, { description: e.target.value })} /></Field></div><div className="mt-2 font-mono text-[11px] text-ink-4">场景 ID：{context.id}</div></div>)}</div><Field label="给模型的总体说明" hint="补充企业边界、优先关注的公告类型或需要人工复核的情况。"><Textarea className="min-h-[100px]" value={profile.notes} onChange={(e) => setProfile((current) => ({ ...current, notes: e.target.value }))} placeholder="例如：优先关注采购意向、招标公告、方案公示和中标信息；只出现硬件采购时通常不相关。" /></Field></div> : profile.capabilities.map((capability, index) => capability.id === activeTab && <CapabilityEditor key={capability.id} capability={capability} onChange={(patch) => updateCapability(index, patch)} />)}
+          {activeTab === "json" ? <div className="rounded-card border border-line bg-bg-sunk p-3"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-[14px] font-semibold text-ink">当前表单生成的 JSON</h3><p className="mt-1 text-[12px] text-ink-4">只读预览，保存草稿时提交的就是这份内容。</p></div><Button size="sm" onClick={() => { void copyJson(); }}>{copied ? "已复制" : "复制 JSON"}</Button></div><pre className="max-h-[620px] overflow-auto rounded-control bg-surface p-3 text-[11.5px] leading-relaxed text-ink-2">{json}</pre></div> : activeTab === "contexts" ? <div className="space-y-4"><div><h3 className="text-[14px] font-semibold text-ink">应用场景配置</h3><p className="mt-1 text-[12px] text-ink-4">场景只提供上下文，不是公司的服务能力；例如“水利”和“矿山”都可以使用“测绘”能力。</p></div><div className="space-y-3">{profile.contexts.map((context, index) => <div key={context.id} className="rounded-card border border-line bg-bg-sunk p-3"><div className="grid gap-3 sm:grid-cols-[180px_1fr]"><Field label="场景名称"><Input value={context.name} onChange={(e) => updateContext(index, { name: e.target.value })} /></Field><Field label="场景说明"><Input value={context.description} onChange={(e) => updateContext(index, { description: e.target.value })} /></Field></div><div className="mt-2 font-mono text-[11px] text-ink-4">场景 ID：{context.id}</div></div>)}</div><Field label="给模型的总体说明" hint="补充企业边界、优先关注的公告类型或需要人工复核的情况。"><Textarea className="min-h-[100px]" value={profile.notes} onChange={(e) => setProfile((current) => ({ ...current, notes: e.target.value }))} placeholder="例如：优先关注采购意向、招标公告、方案公示和中标信息；只出现硬件采购时通常不相关。" /></Field></div> : profile.capabilities.map((capability, index) => capability.id === activeTab && <CapabilityEditor key={capability.id} capability={capability} onChange={(patch) => updateCapability(index, patch)} />)}
           <div className="mt-3 flex flex-wrap gap-2">
             <ReasonDialog open={draftDialog} title="保存业务配置草稿" description="保存会生成不可变版本，但不会立即改变正在运行的业务分析。" confirmLabel="保存草稿" busy={pending === "business-draft"} onClose={() => setDraftDialog(false)} onSubmit={saveDraft} />
             <Button tone="primary" onClick={() => setDraftDialog(true)}>保存草稿</Button>
@@ -141,6 +159,10 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
       <ReasonDialog open={!!rollback} title="回退业务配置" description="回退只切换当前版本指针，历史版本和已经产生的分析结果不会被覆盖。" confirmLabel="确认回退" busy={pending === "business-rollback"} onClose={() => setRollback(null)} onSubmit={async (reason) => (await run("POST", "/api/admin/business/profile/rollback", { versionId: rollback, reason }, { label: "business-rollback", success: "已回退业务配置" })) !== null} />
     </AdminPage>
   );
+}
+
+function TabGroup({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
+  return <div className="rounded-card border border-line bg-bg-sunk px-3 pt-2"><div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5"><span className="text-[12.5px] font-semibold text-ink">{title}</span><span className="text-[11.5px] text-ink-4">{hint}</span></div>{children}</div>;
 }
 
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
