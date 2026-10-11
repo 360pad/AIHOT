@@ -2,6 +2,7 @@
 import { credential } from "../config.ts";
 import { guardedFetch } from "../lib/http-fetch.ts";
 import { collapseWhitespace, stripTags } from "../lib/text.ts";
+import { fromHtml } from "./web-list.ts";
 import { FetchError, type Candidate, type SourceRow } from "./types.ts";
 
 export function getPath(obj: unknown, path: string): unknown {
@@ -136,25 +137,61 @@ function embeddedJson(html: string, source: SourceRow): unknown {
   throw new FetchError(`embedded key ${key} not found`);
 }
 
-export async function fetchJsonList(source: SourceRow): Promise<Candidate[]> {
+interface JsonListOptions {
+  /** First imports may read a bounded historical window; regular runs stay on the newest page. */
+  firstImport?: boolean;
+}
+
+interface JsonPage {
+  data: unknown;
+  /** Number of records in the page before field mapping/filtering. */
+  itemCount: number | null;
+}
+
+function pageRequest(source: SourceRow, page: number): { url: string; bodyJson?: unknown; bodyForm?: Record<string, unknown> } {
   const c = source.config;
-  const url = String(c.url ?? "");
+  const pagination = c.pagination;
+  if (!pagination) return { url: String(c.url ?? ""), bodyJson: c.bodyJson, bodyForm: c.bodyForm };
+  const pageParam = String(pagination.pageParam ?? "page");
+  const sizeParam = pagination.sizeParam ? String(pagination.sizeParam) : null;
+  const pageSize = pagination.pageSize;
+  const location = pagination.location ?? (c.bodyJson ? "bodyJson" : c.bodyForm ? "bodyForm" : "query");
+  if (location === "query") {
+    const parsed = new URL(String(c.url ?? ""));
+    parsed.searchParams.set(pageParam, String(page));
+    if (sizeParam && pageSize !== undefined) parsed.searchParams.set(sizeParam, String(pageSize));
+    return { url: parsed.toString(), bodyJson: c.bodyJson, bodyForm: c.bodyForm };
+  }
+  if (location === "bodyJson") {
+    const bodyJson = { ...(c.bodyJson ?? {}), [pageParam]: page } as Record<string, unknown>;
+    if (sizeParam && pageSize !== undefined) bodyJson[sizeParam] = pageSize;
+    return { url: String(c.url ?? ""), bodyJson, bodyForm: c.bodyForm };
+  }
+  const bodyForm = { ...(c.bodyForm ?? {}), [pageParam]: page } as Record<string, unknown>;
+  if (sizeParam && pageSize !== undefined) bodyForm[sizeParam] = pageSize;
+  return { url: String(c.url ?? ""), bodyJson: c.bodyJson, bodyForm };
+}
+
+async function fetchJsonPage(source: SourceRow, page: number): Promise<JsonPage> {
+  const c = source.config;
+  const request = pageRequest(source, page);
+  const url = request.url;
   const headers: Record<string, string> = { accept: "application/json, text/html;q=0.9", ...(c.headers ?? {}) };
   if (/^https:\/\/api\.github\.com\//.test(url)) {
     const token = credential("collectors", "GITHUB_TOKEN");
     if (token) headers.authorization = `Bearer ${token}`;
   }
-  const formBody = c.bodyForm
-    ? new URLSearchParams(Object.entries(c.bodyForm).map(([key, value]) => [key, String(value)])).toString()
+  const formBody = request.bodyForm
+    ? new URLSearchParams(Object.entries(request.bodyForm).map(([key, value]) => [key, String(value)])).toString()
     : undefined;
   const res = await guardedFetch(url, {
     method: c.method ?? "GET",
-    headers: c.bodyJson
+    headers: request.bodyJson
       ? { ...headers, "content-type": "application/json" }
-      : c.bodyForm
+      : request.bodyForm
         ? { ...headers, "content-type": "application/x-www-form-urlencoded; charset=UTF-8" }
         : headers,
-    body: c.bodyJson ? JSON.stringify(c.bodyJson) : formBody,
+    body: request.bodyJson ? JSON.stringify(request.bodyJson) : formBody,
     timeoutMs: 25_000,
   });
   if (res.status !== 200) throw new FetchError(`HTTP ${res.status}`, res.status);
@@ -167,9 +204,21 @@ export async function fetchJsonList(source: SourceRow): Promise<Candidate[]> {
       throw new FetchError("response is not JSON");
     }
   }
+  if (c.mode === "html_json") {
+    const html = getPath(data, String(c.htmlPath ?? "data.html"));
+    if (typeof html !== "string") throw new FetchError("htmlPath did not resolve to a string");
+    const base = String(c.baseUrl ?? new URL(url).origin);
+    const candidates = fromHtml(html, base, source);
+    return { data: candidates, itemCount: candidates.length };
+  }
   let items = c.itemsPath ? getPath(data, c.itemsPath) : c.jsonKey ? getPath(data, c.jsonKey) : data;
   if (c.itemsObjectValues && items && typeof items === "object" && !Array.isArray(items)) items = Object.values(items);
   if (!Array.isArray(items)) throw new FetchError("items path did not resolve to an array");
+  return { data: items, itemCount: items.length };
+}
+
+function mapJsonItems(source: SourceRow, items: unknown[]): Candidate[] {
+  const c = source.config;
 
   const out: Candidate[] = [];
   for (const item of items) {
@@ -195,5 +244,34 @@ export async function fetchJsonList(source: SourceRow): Promise<Candidate[]> {
     });
   }
   if (items.length > 0 && out.length === 0 && !c.requireBoolean && !c.minNumeric) throw new FetchError("no items mapped (check title/url paths)");
+  return out;
+}
+
+export async function fetchJsonList(source: SourceRow, opts: JsonListOptions = {}): Promise<Candidate[]> {
+  const c = source.config;
+  const pagination = c.pagination;
+  const start = Number(pagination?.start ?? 1);
+  const step = Number(pagination?.step ?? 1);
+  const requestedPages = opts.firstImport && pagination?.firstImportPages !== undefined
+    ? Number(pagination.firstImportPages)
+    : Number(pagination?.pages ?? 1);
+  const pageCount = Math.max(1, Math.min(50, Number.isFinite(requestedPages) ? Math.floor(requestedPages) : 1));
+  const pageStep = Number.isFinite(step) && step !== 0 ? step : 1;
+  const pageSize = Number(pagination?.pageSize ?? 0);
+  const stopWhenShort = pagination?.stopWhenShort === true && pageSize > 0;
+  const out: Candidate[] = [];
+  const seen = new Set<string>();
+  for (let index = 0; index < pageCount; index++) {
+    const page = start + index * pageStep;
+    const result = await fetchJsonPage(source, page);
+    const candidates = c.mode === "html_json" ? result.data as Candidate[] : mapJsonItems(source, result.data as unknown[]);
+    for (const candidate of candidates) {
+      if (seen.has(candidate.url)) continue;
+      seen.add(candidate.url);
+      out.push(candidate);
+    }
+    if (!pagination || result.itemCount === 0 || (stopWhenShort && (result.itemCount ?? 0) < pageSize)) break;
+  }
+  if (out.length === 0 && pagination && pageCount > 1) throw new FetchError("no items returned across paginated requests");
   return out;
 }

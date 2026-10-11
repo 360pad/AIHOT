@@ -40,6 +40,57 @@
 - `allowUrlPrefixes` / `denyUrlPrefixes`：只收某些路径下的文章。
 - `_aihot.maxAgeDays`：对需要实时跟进的行业信源设置原文时间窗口；超过窗口的条目不再导入，已有公开条目会保留在数据库但撤出公开动态和精选。
 
+### json_list
+
+普通 JSON 列表接口按 `itemsPath`/`jsonKey` 取数组，再用字段路径映射标题、链接和时间：
+
+```json
+{
+  "url": "https://example.com/api/notices",
+  "method": "POST",
+  "bodyJson": { "pageNo": 1, "pageSize": 100 },
+  "itemsPath": "result.data.data",
+  "titlePaths": ["title"],
+  "publishedAtPath": "publishDate",
+  "urlTemplate": "https://example.com/detail/{id}"
+}
+```
+
+接口分页不需要为每一页新建信源。声明统一的 `pagination` 后，首次导入读取 `firstImportPages` 页，日常运行读取 `pages` 页；`location` 可为 `query`、`bodyJson` 或 `bodyForm`，`stopWhenShort` 会在返回不足一页时停止：
+
+```json
+{
+  "pagination": {
+    "location": "bodyJson",
+    "pageParam": "pageNo",
+    "sizeParam": "pageSize",
+    "pageSize": 100,
+    "start": 1,
+    "step": 1,
+    "pages": 1,
+    "firstImportPages": 15,
+    "stopWhenShort": true
+  }
+}
+```
+
+有些政务站点的接口返回 JSON，但列表实际在 JSON 的 HTML 字段中。用 `mode: "html_json"` 取出 `htmlPath`，随后复用网页列表的 CSS 选择器和日期解析：
+
+```json
+{
+  "url": "https://example.com/api/page",
+  "mode": "html_json",
+  "htmlPath": "data.html",
+  "baseUrl": "https://example.com",
+  "itemSelector": "ul.notice-list li",
+  "linkSelector": "a[href]",
+  "titleSelector": "a[title]",
+  "publishedAtSelector": "time"
+}
+```
+
+`html_window_var` 和 `html_json_key` 继续用于从 HTML 的脚本块提取 JSON；字段映射方式与普通 JSON 列表相同。
+
 ### x_search
 
 ```json

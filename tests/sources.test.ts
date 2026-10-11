@@ -38,6 +38,7 @@ const pages: Record<string, (cdn: string) => string> = {
     `<content type="html"><![CDATA[<p>${"The feed carries this post whole, paragraph after paragraph. ".repeat(30)}</p>]]></content></entry></feed>`,
   // A list API that gives calendar days as yyyymmdd.
   "/days.json": () => JSON.stringify({ data: { list: [{ seq: 695, ttl: "MCFlow", day: "20260922" }, { seq: 1, ttl: "Bad day", day: "20260230" }] } }),
+  "/html-list.json": () => JSON.stringify({ data: { html: '<ul id="items"><li><a href="/notices/water" title="水环境监测服务公告">水环境监测服务公告</a><span>2026-10-09</span></li></ul>' } }),
   // Google Developers Blog: no date in the feed or in meta tags, only in JSON-LD.
   "/ld-post": () =>
     `<html><head><script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","name":"Blog"},` +
@@ -209,4 +210,54 @@ test("dates in yyyymmdd and in JSON-LD are read", async () => {
   assert.deepEqual(days.map((c) => c.publishedAt?.toISOString() ?? null), ["2026-09-22T00:00:00.000Z", null], "February 30 is no date");
   const got = await fetchDetail(`${site}/ld-post`, { id: "test-feed", config: { detail: { maxFetches: 20 } } } as never, { date: true, title: false, summary: false, body: false });
   assert.equal(got.publishedAt?.toISOString(), "2026-09-24T00:00:00.000Z");
+});
+
+test("JSON list pagination reads bounded backfill pages", async () => {
+  const paginationServer = http.createServer((req, res) => {
+    const page = new URL(req.url ?? "/", "http://127.0.0.1").searchParams.get("page") ?? "1";
+    const rows = page === "1"
+      ? [{ id: "one", title: "第一页公告", published: "2026-10-10" }]
+      : [{ id: "two", title: "第二页公告", published: "2026-10-09" }];
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify(rows));
+  });
+  await new Promise<void>((resolve) => paginationServer.listen(0, "127.0.0.1", () => resolve()));
+  const base = `http://127.0.0.1:${(paginationServer.address() as { port: number }).port}`;
+  try {
+    const rows = await fetchJsonList({
+      id: "test-pagination",
+      config: {
+        url: `${base}/list`,
+        itemsPath: "",
+        titlePaths: ["title"],
+        publishedAtPath: "published",
+        urlTemplate: `${base}/detail/{id}`,
+        pagination: { location: "query", pageParam: "page", pages: 1, firstImportPages: 2 },
+      },
+    } as never, { firstImport: true });
+    assert.deepEqual(rows.map((row) => row.title), ["第一页公告", "第二页公告"]);
+  } finally {
+    await new Promise<void>((resolve) => paginationServer.close(() => resolve()));
+  }
+});
+
+test("JSON list can parse HTML embedded in a JSON response", async () => {
+  const rows = await fetchJsonList({
+    id: "test-html-json",
+    config: {
+      url: `${site}/html-list.json`,
+      mode: "html_json",
+      htmlPath: "data.html",
+      baseUrl: `${site}`,
+      itemSelector: "#items li",
+      linkSelector: "a[href]",
+      titleSelector: "a[title]",
+      publishedAtSelector: "span",
+      allowUrlPrefixes: [`${site}/notices/`],
+    },
+  } as never);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!.title, "水环境监测服务公告");
+  assert.equal(rows[0]!.url, `${site}/notices/water`);
+  assert.equal(rows[0]!.publishedAt?.toISOString(), "2026-10-09T00:00:00.000Z");
 });

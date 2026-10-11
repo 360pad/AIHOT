@@ -112,7 +112,7 @@ export async function collectSource(sourceId: string, opts: { force?: boolean } 
       if (rss.notModified) detail = { notModified: true, httpStatus: 304 };
     }
     else if (source.kind === "web_list") candidates = await fetchWebList(source);
-    else if (source.kind === "json_list") candidates = await fetchJsonList(source);
+    else if (source.kind === "json_list") candidates = await fetchJsonList(source, { firstImport });
     else {
       const x = await fetchXSearch(source);
       candidates = x.candidates;

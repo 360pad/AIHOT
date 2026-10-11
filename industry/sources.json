@@ -211,7 +211,18 @@
         "urlTemplate": "http://www.masygjy.com{infourl}",
         "allowUrlPrefixes": ["http://www.masygjy.com/jyxx/001002/001002001/"],
         "sortByPublishedAt": true,
-        "_aihot": { "initialBackfillLimit": 18, "maxAgeDays": 30 }
+        "pagination": {
+          "location": "bodyForm",
+          "pageParam": "pageIndex",
+          "sizeParam": "pageSize",
+          "pageSize": 18,
+          "start": 0,
+          "step": 1,
+          "pages": 1,
+          "firstImportPages": 4,
+          "stopWhenShort": true
+        },
+        "_aihot": { "initialBackfillLimit": 72, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -249,7 +260,18 @@
         "urlTemplate": "http://www.masygjy.com{infourl}",
         "allowUrlPrefixes": ["http://www.masygjy.com/jyxx/001002/001002004/"],
         "sortByPublishedAt": true,
-        "_aihot": { "initialBackfillLimit": 18, "maxAgeDays": 30 }
+        "pagination": {
+          "location": "bodyForm",
+          "pageParam": "pageIndex",
+          "sizeParam": "pageSize",
+          "pageSize": 18,
+          "start": 0,
+          "step": 1,
+          "pages": 1,
+          "firstImportPages": 4,
+          "stopWhenShort": true
+        },
+        "_aihot": { "initialBackfillLimit": 72, "maxAgeDays": 30 }
       },
       "tier": "T1",
       "first_party": true,
@@ -825,6 +847,17 @@
         "urlTemplate": "https://www.ccgp-anhui.gov.cn/site/detail?parentId=oJCosldFbaJFzmyFhz1c6Q%3D%3D&articleId={articleId}",
         "allowUrlPrefixes": ["https://www.ccgp-anhui.gov.cn/site/detail"],
         "sortByPublishedAt": true,
+        "pagination": {
+          "location": "bodyJson",
+          "pageParam": "pageNo",
+          "sizeParam": "pageSize",
+          "pageSize": 100,
+          "start": 1,
+          "step": 1,
+          "pages": 1,
+          "firstImportPages": 15,
+          "stopWhenShort": true
+        },
         "_aihot": { "initialBackfillLimit": 100, "maxAgeDays": 30 }
       },
       "tier": "T1",
@@ -860,6 +893,17 @@
         "urlTemplate": "https://www.ccgp-anhui.gov.cn/site/detail?parentId=oJCosldFbaJFzmyFhz1c6Q%3D%3D&articleId={articleId}",
         "allowUrlPrefixes": ["https://www.ccgp-anhui.gov.cn/site/detail"],
         "sortByPublishedAt": true,
+        "pagination": {
+          "location": "bodyJson",
+          "pageParam": "pageNo",
+          "sizeParam": "pageSize",
+          "pageSize": 100,
+          "start": 1,
+          "step": 1,
+          "pages": 1,
+          "firstImportPages": 15,
+          "stopWhenShort": true
+        },
         "_aihot": { "initialBackfillLimit": 100, "maxAgeDays": 30 }
       },
       "tier": "T1",
@@ -868,6 +912,33 @@
       "participation_mode": "editorial",
       "interval_minutes": 60,
       "tags": ["官方", "安徽", "政府采购", "采购公告"],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "json-jiangsu-water-notices",
+      "name": "江苏省水利科学研究院·通知公告",
+      "kind": "json_list",
+      "config": {
+        "url": "https://sky.jswater.org.cn/api-gateway/jpaas-publish-server/front/page/build/unit?parseType=bulidstatic&webId=3b61d905430643d3ae1ff14a79defa61&tplSetId=fd9f219dc18e47d885df95fe57893866&pageType=column&tagId=%E6%A0%8F%E7%9B%AE%E5%88%97%E8%A1%A8&editType=null&pageId=975050ce0f4d4ffa9184779110231843",
+        "mode": "html_json",
+        "htmlPath": "data.html",
+        "baseUrl": "https://sky.jswater.org.cn",
+        "itemSelector": "#栏目列表 li",
+        "linkSelector": "a[href]",
+        "titleSelector": "a[title]",
+        "publishedAtSelector": "span",
+        "publishedAtUtcOffset": "+08:00",
+        "allowUrlPrefixes": ["https://sky.jswater.org.cn/slkxy/slzt/tzgg/art/"],
+        "sortByPublishedAt": true,
+        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": ["官方", "江苏", "水利", "通知公告"],
       "site_fulltext": false,
       "syndicate_fulltext": false
     }
