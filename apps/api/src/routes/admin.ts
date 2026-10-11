@@ -4,7 +4,8 @@ import { readFile } from "node:fs/promises";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { actorOf } from "@aihot/backend/admin/auth";
 
-import { importSelectBenchRun, listSelectBenchRuns, selectBenchRun } from "@aihot/backend/admin/selectbench";
+import { annotateSelectBenchCase, importSelectBenchRun, listSelectBenchRuns, selectBenchRun } from "@aihot/backend/admin/selectbench";
+import { businessMatchingTest, businessProfile, createBusinessMatchingTest, listBusinessMatchingTests, publishBusinessProfile, rollbackBusinessProfile, saveBusinessMatchingFeedback, saveBusinessProfileDraft } from "@aihot/backend/admin/business-matching";
 import { modelsOverview, switchModel } from "@aihot/backend/admin/models";
 
 import { contentChain, detachFromFact, mergeStories, overrideFields, rerun, searchContent, setSeoIndexed, setVisibility } from "@aihot/backend/admin/content";
@@ -133,6 +134,37 @@ export function registerAdmin(app: FastifyInstance) {
   app.post("/api/admin/selectbench/import", adminHandler(async (req, _reply, admin) => {
     const b = body<{ label: string; report: unknown }>(req);
     return importSelectBenchRun(b.report, String(b.label || "导入的对比运行"), actorOf(admin));
+  }));
+  app.post("/api/admin/selectbench/:runId/:model/:caseId/annotation", adminHandler(async (req, reply, admin) => {
+    const b = body<{ businessLabel: "relevant" | "irrelevant" | "unknown"; capabilityIds: string[]; participation: "standalone" | "embedded" | "incidental" | "unknown"; evidenceQuality: "clear" | "limited" | "insufficient"; note?: string }>(req);
+    return orNotFound(req, reply, await annotateSelectBenchCase({
+      runId: param(req, "runId"), model: param(req, "model"), caseId: param(req, "caseId"),
+      businessLabel: b.businessLabel, capabilityIds: b.capabilityIds ?? [], participation: b.participation, evidenceQuality: b.evidenceQuality, note: b.note,
+    }, actorOf(admin)));
+  }));
+
+  // Company capability profile, semantic matching tests and human annotations.
+  app.get("/api/admin/business/profile", adminHandler(async () => businessProfile()));
+  app.put("/api/admin/business/profile/draft", adminHandler(async (req, _reply, admin) => {
+    const b = body<{ profile: unknown; expectedRevision: number; reason: string }>(req);
+    return saveBusinessProfileDraft({ profile: b.profile, expectedRevision: Number(b.expectedRevision) || 0, reason: String(b.reason ?? "") }, actorOf(admin));
+  }));
+  app.post("/api/admin/business/profile/publish", adminHandler(async (req, _reply, admin) => {
+    const b = body<{ versionId?: string; expectedRevision: number; reason: string }>(req);
+    return publishBusinessProfile({ versionId: b.versionId, expectedRevision: Number(b.expectedRevision) || 0, reason: String(b.reason ?? "") }, actorOf(admin));
+  }));
+  app.post("/api/admin/business/profile/rollback", adminHandler(async (req, reply, admin) => {
+    const b = body<{ versionId: string; reason: string }>(req);
+    return orNotFound(req, reply, await rollbackBusinessProfile(String(b.versionId ?? ""), String(b.reason ?? ""), actorOf(admin)));
+  }));
+  app.get("/api/admin/business/tests", adminHandler(async () => ({ tests: await listBusinessMatchingTests() })));
+  app.get("/api/admin/business/tests/:id", adminHandler(async (req, reply) => orNotFound(req, reply, await businessMatchingTest(param(req, "id")))));
+  app.post("/api/admin/business/tests", adminHandler(async (req, reply, admin) => {
+    const result = await createBusinessMatchingTest(body(req), actorOf(admin));
+    return reply.code(202).send(result);
+  }));
+  app.post("/api/admin/business/feedback", adminHandler(async (req, reply, admin) => {
+    return orNotFound(req, reply, await saveBusinessMatchingFeedback(body(req), actorOf(admin)));
   }));
 
   // Attention counts for the navigation.

@@ -51,6 +51,7 @@ export default [
     route("admin/models", "routes/admin/models.tsx"),
     route("admin/selectbench", "routes/admin/selectbench.tsx"),
     route("admin/selectbench/:runId", "routes/admin/selectbench-run.tsx"),
+    route("admin/business", "routes/admin/business.tsx"),
     route("admin/settings", "routes/admin/settings.tsx"),
     route("admin/audit", "routes/admin/audit.tsx"),
   ]),

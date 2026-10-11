@@ -9,11 +9,17 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { SITE } from "@aihot/industry/site";
 import { REPO_ROOT } from "../config.ts";
+import { businessProfilePrompt, type BusinessProfile } from "./business.ts";
 
 const DIR = path.join(REPO_ROOT, "industry/prompts");
 const TOKEN = /\{\{(>\s*)?([A-Za-z][\w.-]*)\s*\}\}/g;
 
 const files = new Map<string, string>();
+
+/** Values shared by prompts that need the current, versioned enterprise capability registry. */
+export function businessPromptValues(profile?: BusinessProfile): { businessProfile: string } {
+  return { businessProfile: businessProfilePrompt(profile) };
+}
 
 function raw(name: string): string {
   let text = files.get(name);

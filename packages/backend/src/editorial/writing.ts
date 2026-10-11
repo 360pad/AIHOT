@@ -3,11 +3,15 @@
 // wording lives in the industry pack (industry/prompts/); a failed guard falls back without a repair call.
 import { IDENTITY_CONTEXT_ALIASES, IDENTITY_LEXICON, PUBLISHER_DOMAINS } from "@aihot/industry/taxonomy";
 import { onlyXArticleLink } from "../sources/x.ts";
+import { businessKeywordClues, type BusinessProfile } from "./business.ts";
 import type { AnalyzeInputArticle } from "./input.ts";
-import { promptText } from "./prompts.ts";
+import { businessPromptValues, promptText } from "./prompts.ts";
 
-export const PREFILTER_SYSTEM = promptText("prefilter");
-export const UNDERSTAND_SYSTEM = promptText("understand");
+export const PREFILTER_SYSTEM = promptText("prefilter", businessPromptValues());
+export const UNDERSTAND_SYSTEM = promptText("understand", businessPromptValues());
+
+export const prefilterSystem = (profile?: BusinessProfile) => promptText("prefilter", businessPromptValues(profile));
+export const understandSystem = (profile?: BusinessProfile) => promptText("understand", businessPromptValues(profile));
 
 /** A body longer than this is cut (whole bodies are sent; a few run past the context). */
 export const MAX_BODY_CHARS = 60_000;
@@ -84,7 +88,7 @@ function materialQuality(a: AnalyzeInputArticle): string {
 }
 
 /** The material as the prefilter and the content understanding read it. */
-export function renderContext(a: AnalyzeInputArticle, opts: { annotateQuoted?: boolean } = {}): string {
+export function renderContext(a: AnalyzeInputArticle, opts: { annotateQuoted?: boolean; businessProfile?: BusinessProfile } = {}): string {
   const lines: string[] = [];
   lines.push(`【来源】${a.source.name}（${a.source.kind}，tier=${a.source.tier || "未分级"}）`);
   if (a.source.tags?.length) lines.push(`【来源标签】${a.source.tags.join(", ")}`);
@@ -98,6 +102,10 @@ export function renderContext(a: AnalyzeInputArticle, opts: { annotateQuoted?: b
   const mediaParts = [images ? `${images} 张图` : null, videos ? `${videos} 个视频` : null, unfetchedXArticle(a) ? "含 X 长文链接（正文未抓到）" : null].filter(Boolean);
   if (mediaParts.length) lines.push(`【媒体】${mediaParts.join(" · ")}`);
   lines.push(`【原文链接】${a.url}`);
+  const clues = businessKeywordClues(a, opts.businessProfile);
+  lines.push(clues.length
+    ? `【关键词线索（仅供定位，不是通过条件）】${clues.map((c) => `${c.capabilityName}/${c.role}=${c.term}`).join("；")}`
+    : "【关键词线索（仅供定位，不是通过条件）】未命中配置词语，仍须做语义判断");
   lines.push(`【标题】${a.title}`);
   const quoted = a.xPost?.quoted?.text ? a.xPost.quoted : null;
   if (quoted) {
@@ -118,15 +126,15 @@ export function renderContext(a: AnalyzeInputArticle, opts: { annotateQuoted?: b
 }
 
 /** The prefilter's user message: the context as a JSON string (the prompt was tuned on this form). */
-export const prefilterUser = (a: AnalyzeInputArticle) => JSON.stringify(renderContext(a));
+export const prefilterUser = (a: AnalyzeInputArticle, profile?: BusinessProfile) => JSON.stringify(renderContext(a, { businessProfile: profile }));
 
 /** Nothing to judge beyond the title: the prefilter's BLOCK then means "wait for material". */
 export function missingEvidence(a: AnalyzeInputArticle): boolean {
   return !a.bodyText?.trim() && !a.excerpt?.trim() && !String(a.xPost?.text ?? "").trim() && !String(a.xPost?.quoted?.text ?? "").trim();
 }
 
-export const understandUser = (a: AnalyzeInputArticle) =>
-  ["请按系统规则理解以下单篇材料，一次返回全部六个字段。", renderContext(a, { annotateQuoted: true })].join("\n\n");
+export const understandUser = (a: AnalyzeInputArticle, profile?: BusinessProfile) =>
+  ["请按系统规则理解以下单篇材料，一次返回全部六个字段。", renderContext(a, { annotateQuoted: true, businessProfile: profile })].join("\n\n");
 
 // ── Identity context and guard ────────────────────────────────────────────────────────────────
 

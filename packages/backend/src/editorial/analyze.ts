@@ -1,7 +1,7 @@
 // analyzeArticle: the judging and writing steps, each with its own prompt from the industry pack
 // (industry/prompts/):
-//   1. prefilter: does the material belong to this industry at all (wide recall). Only BLOCK stops an
-//      item; UNKNOWN goes on like PASS (a BLOCK given while material is missing counts as UNKNOWN);
+//   1. prefilter: does the material contain an enabled business capability (wide recall). Only BLOCK
+//      stops model work; UNKNOWN is analyzed for evidence but remains UNKNOWN in the final judgement;
 //   2. score: two independent scores against the source tier's threshold (industry/selection.ts) decide 精选;
 //   3. writing: the Chinese title, summary and reason by the content understanding for selected and
 //      near-selected items, by the cheaper title/summary prompts for the rest;
@@ -22,20 +22,21 @@ import { pageFetchable } from "../content/extract.ts";
 import { shutdownSignal } from "../jobs/queue.ts";
 import {
   buildArticlePrompt, buildLongTweetPrompt, buildShortTweetPrompt, finalizeCopy, isShortTweetInput, looksZh, MAX_BODY_CHARS, missingEvidence,
-  needsShortTweetTranslation, parseTranslateOutput, PREFILTER_SYSTEM, prefilterUser, translateInputOf, UNDERSTAND_SYSTEM, understandUser,
+  needsShortTweetTranslation, parseTranslateOutput, PREFILTER_SYSTEM, prefilterSystem, prefilterUser, translateInputOf, UNDERSTAND_SYSTEM, understandSystem, understandUser,
   type IdentityGuard,
 } from "./writing.ts";
 import { CATEGORY_BY_ITEM_TYPE, CATEGORY_GUIDE, CATEGORY_TAGS, ENTITIES, ENTITY_TAGS, ITEM_TYPES, normalizeTags, TOPIC_TAGS } from "./vocabulary.ts";
-import { promptText, promptVersion } from "./prompts.ts";
+import { businessProfileVersion, loadBusinessProfile, loadBusinessProfileVersion, type BusinessProfile } from "./business.ts";
+import { businessPromptValues, promptText, promptVersion } from "./prompts.ts";
 
 export { buildMaterial, loadAnalyzeInput, type AnalyzeInputArticle };
 
 export const PROMPT_VERSIONS = {
-  prefilter: promptVersion("prefilter"),
-  score: promptVersion("selection-score"),
-  understand: promptVersion("understand"),
+  prefilter: `${promptVersion("prefilter")}+business@${businessProfileVersion()}`,
+  score: `${promptVersion("selection-score")}+business@${businessProfileVersion()}`,
+  understand: `${promptVersion("understand")}+business@${businessProfileVersion()}`,
   summarize: promptVersion("summarize-article", "summarize-article-empty", "summarize-short-post", "summarize-short-post-quoted", "summarize-long-post", "summarize-long-post-quoted", "identity-context"),
-  structure: promptVersion("structure"),
+  structure: `${promptVersion("structure")}+business@${businessProfileVersion()}`,
 } as const;
 /** Every step's prompt, as stored on each judgement. */
 export const ANALYZE_PROMPT_VERSION = Object.values(PROMPT_VERSIONS).join("+");
@@ -66,7 +67,8 @@ const SCORE_CALL: Record<string, { temperature: number; maxTokens: number; timeo
 const scoreCall = (model: string) => SCORE_CALL[model] ?? { temperature: 0.2, maxTokens: 1024, timeoutMs: 120_000 };
 
 /** The score prompt: the industry's taste (industry/prompts/selection-score.md). */
-export const SCORE_SYSTEM = promptText("selection-score");
+export const SCORE_SYSTEM = promptText("selection-score", businessPromptValues());
+const scoreSystem = (profile?: BusinessProfile) => promptText("selection-score", businessPromptValues(profile));
 
 export const ScoreSchema = z.object({ attentionScore: z.coerce.number().int().min(0).max(100) });
 
@@ -104,10 +106,73 @@ export function buildScoreInput(a: AnalyzeInputArticle): string {
 
 // ── Step outputs ──────────────────────────────────────────────────────────────────────────
 
-const PrefilterSchema = z.object({
+const EvidenceSchema = z.object({
+  id: z.string().min(1).max(80),
+  quote: z.string().min(1).max(1200),
+  source: z.enum(["title", "body", "excerpt", "attachment"]).catch("body"),
+  location: z.string().max(160).nullable().optional().catch(null),
+  strength: z.enum(["explicit", "limited", "insufficient"]).catch("limited"),
+  verified: z.boolean().default(false),
+});
+
+const CoverageSchema = z.object({
+  status: z.enum(["complete", "partial", "missing", "unknown"]).catch("unknown"),
+  sectionsRead: z.array(z.string().max(120)).max(30).catch([]),
+  missing: z.array(z.string().max(160)).max(20).catch([]),
+  notes: z.string().max(500).catch(""),
+});
+
+const TaskMatchSchema = z.object({
+  capabilityId: z.string().max(100),
+  relation: z.enum(["direct", "partial", "adjacent", "none"]).catch("adjacent"),
+  rationale: z.string().max(400).catch(""),
+  evidenceIds: z.array(z.string().max(80)).max(12).catch([]),
+});
+
+const TaskSchema = z.object({
+  id: z.string().min(1).max(80),
+  name: z.string().max(240).catch(""),
+  lot: z.string().max(160).nullable().optional().catch(null),
+  action: z.string().max(160).catch(""),
+  object: z.string().max(240).catch(""),
+  methods: z.array(z.string().max(120)).max(20).catch([]),
+  deliverables: z.array(z.string().max(160)).max(20).catch([]),
+  purchaseRole: z.enum(["principal", "component", "reference", "unknown"]).catch("unknown"),
+  participation: z.enum(["standalone", "lot", "component", "incidental", "unknown"]).catch("unknown"),
+  matches: z.array(TaskMatchSchema).max(12).catch([]),
+  evidenceIds: z.array(z.string().max(80)).max(12).catch([]),
+});
+
+const ProjectSchema = z.object({
+  id: z.string().min(1).max(80),
+  name: z.string().max(240).catch(""),
+  number: z.string().max(120).nullable().optional().catch(null),
+  lots: z.array(z.string().max(160)).max(20).catch([]),
+  tasks: z.array(TaskSchema).max(50).catch([]),
+  evidenceIds: z.array(z.string().max(80)).max(20).catch([]),
+});
+
+const OrganizationSchema = z.object({
+  name: z.string().max(160),
+  role: z.enum(["purchaser", "tenderer", "agent", "supplier", "other"]).catch("other"),
+  evidenceIds: z.array(z.string().max(80)).max(8).catch([]),
+});
+
+const BusinessContractSchema = z.object({
+  materialCoverage: CoverageSchema.catch({ status: "unknown", sectionsRead: [], missing: [], notes: "" }),
+  projects: z.array(ProjectSchema).max(20).catch([]),
+  contexts: z.array(z.string().max(80)).max(20).catch([]),
+  organizations: z.array(OrganizationSchema).max(20).catch([]),
+  evidence: z.array(EvidenceSchema).max(80).catch([]),
+  missingInformation: z.array(z.string().max(200)).max(20).catch([]),
+});
+
+const PrefilterSchema = BusinessContractSchema.extend({
   label: z.preprocess((v) => String(v ?? "").trim().toUpperCase(), z.enum(["PASS", "BLOCK", "UNKNOWN"])),
   reason: z.string().max(200).catch(""),
 });
+
+type BusinessContract = z.infer<typeof BusinessContractSchema>;
 
 const FactSchema = z
   .object({
@@ -141,7 +206,8 @@ const SummarizeSchema = z.object({ titleZh: z.string(), summaryZh: z.string(), b
 const ZH_COUNT = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "十二"];
 
 /** The structure step's prompt (it writes nothing a reader sees), filled from the pack's vocabulary. */
-const STRUCTURE_SYSTEM = promptText("structure", {
+const structureSystem = (profile?: BusinessProfile) => promptText("structure", {
+  ...businessPromptValues(profile),
   categoryCount: ZH_COUNT[CATEGORIES.length] ?? String(CATEGORIES.length),
   categoryGuide: CATEGORY_GUIDE,
   categoryTags: CATEGORY_TAGS.join("、"),
@@ -151,7 +217,7 @@ const STRUCTURE_SYSTEM = promptText("structure", {
 });
 
 export interface AnalysisRun {
-  prefilter: { label: "PASS" | "BLOCK" | "UNKNOWN"; reason: string; model: string; receiptId: number; reused: boolean };
+  prefilter: BusinessContract & { label: "PASS" | "BLOCK" | "UNKNOWN"; reason: string; model: string; receiptId: number; reused: boolean; profileVersion: string };
   /**
    * The independent score calls and the tier threshold they are held against; absent when the material
    * is not scored. `refused`: the model's content filter declined it, so it is not selected.
@@ -181,7 +247,7 @@ export function waitsForPage(a: AnalyzeInputArticle): boolean {
   return a.bodyStatus === "pending" && !a.bodyText && !a.xPost && pageFetchable(a.url, a.source.kind);
 }
 
-type StepOpts = { attemptTag?: string; scoreModel?: string };
+type StepOpts = { attemptTag?: string; scoreModel?: string; businessProfile?: BusinessProfile };
 export class AnalysisInterruptedError extends Error {}
 
 function checkAnalysisRunning() {
@@ -191,28 +257,64 @@ function checkAnalysisRunning() {
 const subjectOf = (a: AnalyzeInputArticle) => `article:${a.id}@${a.revision}`;
 const tagged = (attemptTag: string | undefined, step: string) => [attemptTag, step].filter(Boolean).join(":") || undefined;
 
+function evidenceMaterial(a: AnalyzeInputArticle): Array<{ source: "title" | "body" | "excerpt"; text: string }> {
+  const material: Array<{ source: "title" | "body" | "excerpt"; text: string }> = [{ source: "title", text: a.title }];
+  if (a.bodyText?.trim()) material.push({ source: "body", text: a.bodyText });
+  if (a.excerpt?.trim()) material.push({ source: "excerpt", text: a.excerpt });
+  if (a.xPost?.text?.trim()) material.push({ source: "body", text: String(a.xPost.text) });
+  return material;
+}
+
+function verifyEvidence(a: AnalyzeInputArticle, evidence: BusinessContract["evidence"]): BusinessContract["evidence"] {
+  const material = evidenceMaterial(a).map((m) => ({ ...m, normalized: collapseWhitespace(m.text).toLocaleLowerCase() }));
+  return evidence.map((item) => {
+    const quote = collapseWhitespace(item.quote).toLocaleLowerCase();
+    const verified = quote.length >= 4 && material.some((m) => m.normalized.includes(quote));
+    const source = verified ? (material.find((m) => m.normalized.includes(quote))?.source ?? item.source) : item.source;
+    return { ...item, source, verified };
+  });
+}
+
 async function runPrefilter(a: AnalyzeInputArticle, opts: StepOpts): Promise<AnalysisRun["prefilter"]> {
   const model = await modelFor("prefilter");
+  const profile = opts.businessProfile;
   checkAnalysisRunning();
   const res = await chatJson({
     model,
     purpose: "prefilter_article",
     subject: subjectOf(a),
-    promptVersion: PROMPT_VERSIONS.prefilter,
-    system: PREFILTER_SYSTEM,
-    user: prefilterUser(a),
+    promptVersion: `${promptVersion("prefilter")}+business@${businessProfileVersion(profile)}`,
+    system: prefilterSystem(profile),
+    user: prefilterUser(a, profile),
     schema: PrefilterSchema,
     temperature: 0,
-    maxTokens: 512,
+    maxTokens: 8_192,
     attemptTag: opts.attemptTag,
   });
-  // A BLOCK without material to back it counts as UNKNOWN (which goes on).
-  const label = res.data.label === "BLOCK" && missingEvidence(a) ? "UNKNOWN" : res.data.label;
-  return { label, reason: res.data.reason, model: res.model, receiptId: res.receiptId, reused: res.reused };
+  // A BLOCK without material to back it counts as UNKNOWN so the item can be retried with the body.
+  const evidence = verifyEvidence(a, res.data.evidence);
+  const verifiedIds = new Set(evidence.filter((e) => e.verified).map((e) => e.id));
+  const capabilityIds = new Set((profile?.capabilities ?? []).filter((c) => c.enabled).map((c) => c.id));
+  const hasStructuredContract = res.data.materialCoverage.status !== "unknown" || res.data.projects.length > 0 || res.data.evidence.length > 0;
+  const hasMatchedTask = res.data.projects.some((p) => p.tasks.some((task) => task.matches.some((match) =>
+    (match.relation === "direct" || match.relation === "partial") && capabilityIds.has(match.capabilityId) && match.evidenceIds.some((id) => verifiedIds.has(id)))));
+  let label = res.data.label;
+  if (label === "BLOCK" && missingEvidence(a)) label = "UNKNOWN";
+  if (label === "PASS" && hasStructuredContract && !hasMatchedTask) label = "UNKNOWN";
+  return {
+    ...res.data,
+    label,
+    evidence,
+    model: res.model,
+    receiptId: res.receiptId,
+    reused: res.reused,
+    profileVersion: businessProfileVersion(profile),
+  };
 }
 
 async function runScores(a: AnalyzeInputArticle, threshold: number, opts: StepOpts): Promise<NonNullable<AnalysisRun["scores"]>> {
   const model = opts.scoreModel ?? (await modelFor("score"));
+  const profile = opts.businessProfile;
   const call = scoreCall(model);
   const input = buildScoreInput(a);
   const values: number[] = [];
@@ -223,7 +325,7 @@ async function runScores(a: AnalyzeInputArticle, threshold: number, opts: StepOp
     checkAnalysisRunning();
     try {
       const res = await chatJson({
-        model, purpose: "score_article", subject: subjectOf(a), promptVersion: PROMPT_VERSIONS.score, system: SCORE_SYSTEM, user: input,
+        model, purpose: "score_article", subject: subjectOf(a), promptVersion: `${promptVersion("selection-score")}+business@${businessProfileVersion(profile)}`, system: scoreSystem(profile), user: input,
         schema: ScoreSchema, temperature: call.temperature, maxTokens: call.maxTokens, timeoutMs: call.timeoutMs,
         // Each call is its own paid request; an explicit re-evaluation gets new ones.
         attemptTag: tagged(opts.attemptTag, `score-${i + 1}`),
@@ -242,13 +344,14 @@ async function runScores(a: AnalyzeInputArticle, threshold: number, opts: StepOp
 
 async function runStructure(a: AnalyzeInputArticle, opts: StepOpts): Promise<NonNullable<AnalysisRun["structure"]>> {
   const model = await modelFor("structure");
+  const profile = opts.businessProfile;
   checkAnalysisRunning();
   const res = await chatJson({
     model,
     purpose: "structure_article",
     subject: subjectOf(a),
-    promptVersion: PROMPT_VERSIONS.structure,
-    system: STRUCTURE_SYSTEM,
+    promptVersion: `${promptVersion("structure")}+business@${businessProfileVersion(profile)}`,
+    system: structureSystem(profile),
     user: buildMaterial(a),
     schema: StructureSchema,
     temperature: 0.2,
@@ -262,11 +365,12 @@ async function runStructure(a: AnalyzeInputArticle, opts: StepOpts): Promise<Non
 /** The content understanding; null when the model's content filter declines the material. */
 async function runUnderstand(a: AnalyzeInputArticle, opts: StepOpts): Promise<AnalysisRun["writing"]> {
   const model = await modelFor("understand");
-  const text = understandUser(a);
+  const profile = opts.businessProfile;
+  const text = understandUser(a, profile);
   const call = (image: ContentPart | null) => {
     checkAnalysisRunning();
     return chatJson({
-      model, purpose: "understand_article", subject: subjectOf(a), promptVersion: PROMPT_VERSIONS.understand, system: UNDERSTAND_SYSTEM,
+      model, purpose: "understand_article", subject: subjectOf(a), promptVersion: `${promptVersion("understand")}+business@${businessProfileVersion(profile)}`, system: understandSystem(profile),
       user: image ? [{ type: "text", text }, image] : text, schema: UnderstandSchema, temperature: 0.2, maxTokens: 16_384,
       timeoutMs: 180_000, attemptTag: tagged(opts.attemptTag, "understand"),
     });
@@ -338,21 +442,23 @@ async function runSummarize(a: AnalyzeInputArticle, opts: StepOpts): Promise<Non
  */
 export async function runAnalysis(a: AnalyzeInputArticle, opts: StepOpts & { stages?: "selection" | "all" } = {}): Promise<AnalysisRun> {
   checkAnalysisRunning();
-  const prefilter = await runPrefilter(a, opts);
-  // UNKNOWN is let through (its material is as complete as it will get); BLOCK stops here.
+  const businessProfile = opts.businessProfile ?? await loadBusinessProfile();
+  const stepOpts = { ...opts, businessProfile };
+  const prefilter = await runPrefilter(a, stepOpts);
+  // UNKNOWN continues for evidence gathering and a readable summary, but remains UNKNOWN in the final result.
   if (prefilter.label === "BLOCK") return { prefilter, scores: null, writing: null, structure: null };
   const threshold = tierThreshold(a.source.tier);
   if (opts.stages === "selection") {
-    const scores = threshold === null ? null : await runScores(a, threshold, opts);
+    const scores = threshold === null ? null : await runScores(a, threshold, stepOpts);
     return { prefilter, scores, writing: null, structure: null };
   }
   // The structure step needs nothing from the scores: it runs beside them.
-  const structure = runStructure(a, opts).then((value) => ({ value }), (error: unknown) => ({ error }));
+  const structure = runStructure(a, stepOpts).then((value) => ({ value }), (error: unknown) => ({ error }));
   try {
-    const scores = threshold === null ? null : await runScores(a, threshold, opts);
+    const scores = threshold === null ? null : await runScores(a, threshold, stepOpts);
     const sum = scores && !scores.refused && scores.values.length === SCORE_CALLS ? scores.values.reduce((total, v) => total + v, 0) : null;
     const near = sum !== null && (sum >= scores!.threshold * SCORE_CALLS || sum > UNDERSTAND_FLOOR * SCORE_CALLS);
-    const writing = (near ? await runUnderstand(a, opts) : null) ?? (await runSummarize(a, opts));
+    const writing = (near ? await runUnderstand(a, stepOpts) : null) ?? (await runSummarize(a, stepOpts));
     const s = await structure;
     if ("error" in s) throw s.error;
     return { prefilter, scores, writing, structure: s.value };
@@ -363,14 +469,52 @@ export async function runAnalysis(a: AnalyzeInputArticle, opts: StepOpts & { sta
   }
 }
 
+/** Runs the same business prefilter on pasted admin material without creating an article row. */
+export async function analyzeBusinessMaterial(input: {
+  testId: string;
+  profileVersionId: string;
+  title: string;
+  body: string;
+  url?: string | null;
+}) {
+  const profile = await loadBusinessProfileVersion(input.profileVersionId);
+  if (!profile) throw new Error("业务配置版本不存在或不可用");
+  const article: AnalyzeInputArticle = {
+    id: `business-test:${input.testId}`,
+    revision: 1,
+    title: input.title,
+    url: input.url || `https://local.invalid/business-tests/${input.testId}`,
+    author: null,
+    publishedAt: null,
+    discoveredAt: new Date(),
+    bodyText: input.body || null,
+    excerpt: null,
+    bodyStatus: input.body ? "ok" : "unconfirmed",
+    xPost: null,
+    media: [],
+    source: { name: "管理员材料测试", kind: "external", tier: "T1", firstParty: true, fetchesBody: true },
+  };
+  const prefilter = await runPrefilter(article, { businessProfile: profile, attemptTag: `business-test:${input.testId}` });
+  return {
+    label: prefilter.label,
+    reason: prefilter.reason,
+    profileVersion: prefilter.profileVersion,
+    materialCoverage: prefilter.materialCoverage,
+    projects: prefilter.projects,
+    contexts: prefilter.contexts,
+    organizations: prefilter.organizations,
+    evidence: prefilter.evidence,
+    missingInformation: prefilter.missingInformation,
+  };
+}
+
 /** One judgement from the steps: the selection rule, the reader-facing copy and the structure. */
 export function normalizeAnalysis(run: AnalysisRun) {
   const label = run.prefilter.label;
   const titleZh = collapseWhitespace(run.writing?.titleZh ?? "");
   const summaryZh = (run.writing?.summaryZh ?? "").trim();
-  // Past the prefilter (PASS or UNKNOWN) an item is relevant, but without a usable Chinese title and
-  // summary it cannot be published: it waits.
-  const relevance = label === "BLOCK" ? "block" : run.writing && (!titleZh || !summaryZh) ? "unknown" : "pass";
+  // A successful writing call never upgrades an unresolved business judgement.
+  const relevance = label === "BLOCK" ? "block" : label === "UNKNOWN" || (run.writing && (!titleZh || !summaryZh)) ? "unknown" : "pass";
   // Selected when the two scores add up to twice the tier threshold; the mean, floored,
   // is the score shown (it never decides a half point on its own).
   const values = run.scores && !run.scores.refused ? run.scores.values : null;
@@ -384,6 +528,15 @@ export function normalizeAnalysis(run: AnalysisRun) {
     const display = ENTITIES[s]?.displayTag;
     if (display && !tags.includes(display)) tags.push(display);
   }
+  const businessMatch = {
+    label,
+    materialCoverage: run.prefilter.materialCoverage,
+    projects: run.prefilter.projects,
+    contexts: run.prefilter.contexts,
+    organizations: run.prefilter.organizations,
+    evidence: run.prefilter.evidence,
+    missingInformation: run.prefilter.missingInformation,
+  };
   return {
     relevance,
     selected,
@@ -399,6 +552,7 @@ export function normalizeAnalysis(run: AnalysisRun) {
     summaryZh,
     reasonZh: run.writing?.reasonZh ?? null,
     fact: run.structure?.fact ?? null,
+    businessMatch,
   };
 }
 
@@ -429,6 +583,8 @@ export async function analyzeArticle(articleId: string, opts: StepOpts = {}): Pr
   const w = run.writing;
   const detail = {
     prefilter: { label: run.prefilter.label, reason: run.prefilter.reason },
+    businessMatch: out.businessMatch,
+    businessProfileVersion: run.prefilter.profileVersion,
     scores: out.scores, scoreModel: out.scoreModel, threshold: out.threshold, ...(out.scoreRefused ? { scoreRefused: true } : {}),
     ...(w ? { writer: w.kind, writerModel: w.model, itemType: w.itemType ?? null, authorRole: w.authorRole ?? null } : {}),
     ...(w?.identityGuard?.outcome === "fallback" ? { identityGuard: w.identityGuard } : {}),
@@ -440,7 +596,7 @@ export async function analyzeArticle(articleId: string, opts: StepOpts = {}): Pr
     const [row] = await tx<{ id: number }[]>`
       INSERT INTO analyses (article_id, input_revision, origin, model, prompt_version, receipt_ids, relevance, category, tags,
         subjects, title_zh, summary_zh, reason_zh, score, selected, output)
-      VALUES (${articleId}, ${input.revision}, 'model', ${w?.model ?? run.prefilter.model}, ${ANALYZE_PROMPT_VERSION}, ${receiptIds},
+      VALUES (${articleId}, ${input.revision}, 'model', ${w?.model ?? run.prefilter.model}, ${`${ANALYZE_PROMPT_VERSION}+runtime-business@${run.prefilter.profileVersion}`}, ${receiptIds},
         ${out.relevance}, ${out.category}, ${out.tags}, ${out.subjects}, ${out.titleZh}, ${out.summaryZh}, ${out.reasonZh},
         ${out.score}, ${out.selected}, ${tx.json(detail as never)})
       RETURNING id`;

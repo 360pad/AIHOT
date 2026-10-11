@@ -88,7 +88,7 @@ test("every prompt in the pack renders, and the site's name replaces the templat
     const text = promptText(file.slice(0, -3), values);
     assert.ok(text.length > 20 && !/\{\{/.test(text), file);
   }
-  assert.ok(PREFILTER_SYSTEM.startsWith(`为 ${SITE.name} 做宽召回的项目相关性预筛`));
+  assert.ok(PREFILTER_SYSTEM.startsWith(`为 ${SITE.name} 做企业能力相关性预筛`));
 });
 
 test("a selected item: prefilter, two scores, the content understanding and the structure", async () => {
@@ -125,14 +125,14 @@ test("a near-selected item is written like a selected one; below the floor it is
   assert.deepEqual((await row(lowId)).tags, ["城市治理与数字政府", "招标公告"], "structure tags");
 });
 
-test("the prefilter's BLOCK stops everything; UNKNOWN goes on like PASS", async () => {
+test("the prefilter's BLOCK stops everything; UNKNOWN remains pending", async () => {
   const off = await analyzeArticle(await article("OFFTOPIC"));
   assert.deepEqual([off!.output!.relevance, off!.output!.selected], ["block", false]);
   assert.deepEqual(calls("OFFTOPIC"), ["prefilter"]);
-  // An UNKNOWN with material is judged and written like a PASS, up to 精选 (60 + 62 ≥ 2 × 60).
+  // An UNKNOWN with material can still be scored and written for diagnosis, but never becomes public relevance PASS.
   const vagueId = await article("VAGUE");
   const vague = await analyzeArticle(vagueId);
-  assert.deepEqual([vague!.output!.relevance, vague!.output!.selected, vague!.output!.titleZh], ["pass", true, "理解标题 VAGUE"]);
+  assert.deepEqual([vague!.output!.relevance, vague!.output!.selected, vague!.output!.titleZh], ["unknown", false, "理解标题 VAGUE"]);
   assert.equal((await row(vagueId)).output.prefilter.label, "UNKNOWN", "the prefilter's own answer stays on record");
   // Nothing but a title and no page to fetch: the BLOCK counts as UNKNOWN and is scored, but the
   // translation writes nothing from a bare title, so it waits for material instead of being published.

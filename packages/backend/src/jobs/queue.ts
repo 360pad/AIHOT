@@ -20,6 +20,7 @@ export const QUEUES = {
   republishSource: "publication.republish-source",
 
   prepareMedia: "media.prepare",
+  businessMatching: "business.matching-test",
 } as const;
 
 type QueueOptions = NonNullable<Parameters<PgBoss["createQueue"]>[1]>;
@@ -38,6 +39,7 @@ export const QUEUE_OPTIONS: Record<string, QueueOptions> = {
   [QUEUES.republishSource]: { policy: "short", retryLimit: 2, retryDelay: 60, expireInSeconds: 3600 },
 
   [QUEUES.prepareMedia]: { policy: "short", retryLimit: 1, retryDelay: 120, expireInSeconds: 600 },
+  [QUEUES.businessMatching]: { policy: "short", retryLimit: 1, retryDelay: 30, retryBackoff: true, expireInSeconds: 900 },
 };
 
 const ensured = new Set<string>();

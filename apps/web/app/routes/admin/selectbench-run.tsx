@@ -15,6 +15,11 @@ interface Decision {
   reason: string | null;
   error: string | null;
   receiptId: number | null;
+  businessLabel: "relevant" | "irrelevant" | "unknown" | null;
+  capabilityIds: string[] | null;
+  participation: "standalone" | "embedded" | "incidental" | "unknown" | null;
+  evidenceQuality: "clear" | "limited" | "insufficient" | null;
+  annotation: { note?: string | null } | null;
 }
 interface Data {
   run: { id: string; label: string; split: string | null; sample_size: number; prompt_version: string | null; models: string[]; summary: Record<string, Record<string, number>>; created_at: string };
@@ -127,6 +132,8 @@ export default function SelectBenchRun({ loaderData: d }: Route.ComponentProps) 
                                   <div className="mb-1 flex items-center justify-between text-[12px] text-ink-3"><span className="font-medium text-ink-2">{m}</span>{x?.category && <span>{CATEGORY_LABELS[x.category as keyof typeof CATEGORY_LABELS] ?? x.category}</span>}</div>
                                   <div className="text-[12.5px] leading-relaxed text-ink-2">{x?.error ?? x?.reason ?? "（没有理由）"}</div>
                                   <div className="mt-1 text-[11.5px] text-ink-4">相关性 {x?.relevance ?? "—"}{x?.receiptId ? ` · 回执 #${x.receiptId}` : ""}</div>
+                                  {x?.businessLabel && <div className="mt-2 flex flex-wrap gap-1.5"><Badge tone={x.businessLabel === "relevant" ? "ok" : x.businessLabel === "unknown" ? "warn" : "muted"}>业务 {x.businessLabel === "relevant" ? "相关" : x.businessLabel === "unknown" ? "待确认" : "无关"}</Badge>{x.capabilityIds?.map((id) => <Badge key={id} tone="info">能力 {id}</Badge>)}{x.participation && <Badge tone="info">参与 {x.participation}</Badge>}{x.evidenceQuality && <Badge tone="info">证据 {x.evidenceQuality}</Badge>}</div>}
+                                  {x?.annotation?.note && <div className="mt-1 text-[11.5px] text-ink-3">人工备注：{x.annotation.note}</div>}
                                 </div>
                               );
                             })}
