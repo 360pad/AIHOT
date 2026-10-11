@@ -115,20 +115,26 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
         </div>
       </Card>
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid items-start gap-5 lg:grid-cols-[224px_minmax(0,1fr)]">
+        <Card className="lg:sticky lg:top-6" title="业务配置" pad={false}>
+          <nav aria-label="业务配置二级导航" className="p-2">
+            <SubnavSection title="业务能力" hint="公司能提供什么服务">
+              {profile.capabilities.map((capability) => <SubnavItem key={capability.id} active={activeTab === capability.id} onClick={() => setActiveTab(capability.id)}>{capability.name || "未命名能力"}</SubnavItem>)}
+              <SubnavAction onClick={addCapability}>＋ 新建业务能力</SubnavAction>
+            </SubnavSection>
+            <SubnavSection title="应用场景" hint="项目发生在哪里、服务谁">
+              <SubnavItem active={activeTab === "contexts"} onClick={() => setActiveTab("contexts")}>场景配置</SubnavItem>
+              <SubnavAction onClick={addContext}>＋ 新建应用场景</SubnavAction>
+            </SubnavSection>
+            <SubnavSection title="查看与验证" hint="核对配置和测试材料">
+              <SubnavItem active={activeTab === "json"} onClick={() => setActiveTab("json")}>JSON 预览</SubnavItem>
+            </SubnavSection>
+          </nav>
+        </Card>
+
+        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
         <Card title="企业能力配置" right={<span>草稿修订 {revision} · 当前 {d.current?.versionId ?? "未发布"}</span>}>
-          <p className="mb-4 text-[13px] leading-relaxed text-ink-3">这里分开维护两类信息：业务能力是“公司能做什么”，应用场景是“项目发生在哪里、服务谁”。大模型会同时使用两类信息，但场景不会替代业务能力判断。</p>
-          <div className="mb-4 space-y-3">
-            <TabGroup title="业务能力" hint="公司能提供什么服务和交付成果">
-              <div className="flex gap-1 overflow-x-auto pb-px">{profile.capabilities.map((capability) => <TabButton key={capability.id} active={activeTab === capability.id} onClick={() => setActiveTab(capability.id)}>{capability.name}</TabButton>)}<button type="button" onClick={addCapability} className="shrink-0 rounded-t-control px-4 py-2.5 text-[13px] font-medium text-accent transition-colors hover:bg-accent-soft">＋ 新建业务能力</button></div>
-            </TabGroup>
-            <TabGroup title="应用场景" hint="项目发生的行业、对象或业务环境">
-              <div className="flex gap-1 overflow-x-auto pb-px"><TabButton active={activeTab === "contexts"} onClick={() => setActiveTab("contexts")}>场景配置</TabButton><button type="button" onClick={addContext} className="shrink-0 rounded-t-control px-4 py-2.5 text-[13px] font-medium text-accent transition-colors hover:bg-accent-soft">＋ 新建应用场景</button></div>
-            </TabGroup>
-            <TabGroup title="查看与验证" hint="核对最终 JSON 或进行材料测试">
-              <div className="flex gap-1 overflow-x-auto pb-px"><TabButton active={activeTab === "json"} onClick={() => setActiveTab("json")}>JSON 预览</TabButton></div>
-            </TabGroup>
-          </div>
+          <p className="mb-4 text-[13px] leading-relaxed text-ink-3">从左侧选择要维护的业务能力或应用场景，右侧只显示当前编辑内容。业务能力回答“公司能做什么”，应用场景补充“项目发生在哪里、服务谁”。</p>
 
           {activeTab === "json" ? <div className="rounded-card border border-line bg-bg-sunk p-3"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-[14px] font-semibold text-ink">当前表单生成的 JSON</h3><p className="mt-1 text-[12px] text-ink-4">只读预览，保存草稿时提交的就是这份内容。</p></div><Button size="sm" onClick={() => { void copyJson(); }}>{copied ? "已复制" : "复制 JSON"}</Button></div><pre className="max-h-[620px] overflow-auto rounded-control bg-surface p-3 text-[11.5px] leading-relaxed text-ink-2">{json}</pre></div> : activeTab === "contexts" ? <div className="space-y-4"><div><h3 className="text-[14px] font-semibold text-ink">应用场景配置</h3><p className="mt-1 text-[12px] text-ink-4">场景只提供上下文，不是公司的服务能力；例如“水利”和“矿山”都可以使用“测绘”能力。</p></div><div className="space-y-3">{profile.contexts.map((context, index) => <div key={context.id} className="rounded-card border border-line bg-bg-sunk p-3"><div className="grid gap-3 sm:grid-cols-[180px_1fr]"><Field label="场景名称"><Input value={context.name} onChange={(e) => updateContext(index, { name: e.target.value })} /></Field><Field label="场景说明"><Input value={context.description} onChange={(e) => updateContext(index, { description: e.target.value })} /></Field></div><div className="mt-2 font-mono text-[11px] text-ink-4">场景 ID：{context.id}</div></div>)}</div><Field label="给模型的总体说明" hint="补充企业边界、优先关注的公告类型或需要人工复核的情况。"><Textarea className="min-h-[100px]" value={profile.notes} onChange={(e) => setProfile((current) => ({ ...current, notes: e.target.value }))} placeholder="例如：优先关注采购意向、招标公告、方案公示和中标信息；只出现硬件采购时通常不相关。" /></Field></div> : profile.capabilities.map((capability, index) => capability.id === activeTab && <CapabilityEditor key={capability.id} capability={capability} onChange={(patch) => updateCapability(index, patch)} />)}
           <div className="mt-3 flex flex-wrap gap-2">
@@ -142,6 +148,7 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
             <div key={v.id} className="flex items-start justify-between gap-3 px-4 py-3 text-[13px]"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-[11px] text-ink-3">{v.id}</span><Badge tone={v.id === d.current?.versionId ? "ok" : v.status === "draft" ? "warn" : "muted"}>{v.id === d.current?.versionId ? "当前" : v.status === "draft" ? "草稿" : "历史"}</Badge></div><div className="mt-1 text-[11.5px] text-ink-4">{bj(v.created_at, true)} · {v.content_hash.slice(0, 12)}</div></div>{v.id !== d.current?.versionId && <Button size="sm" onClick={() => setRollback(v.id)}>回退</Button>}</div>
           ))}</div> : <Empty>还没有业务配置版本</Empty>}
         </Card>
+        </div>
       </div>
 
       <Card className="mt-5" title="材料测试" right={<span>测试调用与正式分析使用同一业务结果契约</span>}>
@@ -161,12 +168,16 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
   );
 }
 
-function TabGroup({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
-  return <div className="rounded-card border border-line bg-bg-sunk px-3 pt-2"><div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5"><span className="text-[12.5px] font-semibold text-ink">{title}</span><span className="text-[11.5px] text-ink-4">{hint}</span></div>{children}</div>;
+function SubnavSection({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
+  return <div className="mb-4 last:mb-0"><div className="px-2 pb-1.5"><div className="text-[12.5px] font-semibold text-ink">{title}</div><div className="mt-0.5 text-[11.5px] leading-relaxed text-ink-4">{hint}</div></div><div className="space-y-0.5">{children}</div></div>;
 }
 
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
-  return <button type="button" onClick={onClick} className={`shrink-0 rounded-t-control px-4 py-2.5 text-[13px] font-medium transition-colors ${active ? "bg-ink text-bg" : "text-ink-3 hover:bg-bg-sunk hover:text-ink"}`}>{children}</button>;
+function SubnavItem({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
+  return <button type="button" onClick={onClick} className={`flex min-h-9 w-full items-center rounded-control px-2.5 text-left text-[13px] transition-colors ${active ? "bg-ink text-bg font-medium" : "text-ink-2 hover:bg-bg-sunk hover:text-ink"}`}><span className="min-w-0 truncate">{children}</span></button>;
+}
+
+function SubnavAction({ onClick, children }: { onClick: () => void; children: string }) {
+  return <button type="button" onClick={onClick} className="flex min-h-8 w-full items-center rounded-control px-2.5 text-left text-[12.5px] font-medium text-accent transition-colors hover:bg-accent-soft">{children}</button>;
 }
 
 function Step({ number, title, text }: { number: string; title: string; text: string }) {
