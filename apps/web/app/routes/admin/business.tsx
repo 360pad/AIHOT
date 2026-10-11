@@ -5,10 +5,24 @@ import { adminGet } from "../../lib/admin.server";
 import { useAdminAction } from "../../features/admin/action";
 import { bj } from "../../features/admin/format";
 import { AdminPage, Badge, Button, Card, Empty, Field, Input, ReasonDialog, Select, Textarea } from "../../features/admin/ui";
-import { toast } from "../../features/admin/toast";
 
+type Priority = "重点" | "常规" | "观察";
+type Capability = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  priority: Priority;
+  description: string;
+  serviceTerms: string[];
+  methodTerms: string[];
+  deliverableTerms: string[];
+  contextTerms: string[];
+  positiveExamples: string[];
+  negativeExamples: string[];
+  boundaries: string[];
+};
+type Profile = { schemaVersion: string; capabilities: Capability[]; contexts: Array<{ id: string; name: string; description: string }>; notes: string };
 type ProfileVersion = { id: string; content_hash: string; profile: Profile; status: string; created_by: string; created_at: string; published_at: string | null };
-type Profile = { schemaVersion: string; capabilities: Array<{ id: string; name: string; enabled: boolean; priority: string; description: string; serviceTerms: string[]; methodTerms: string[]; deliverableTerms: string[]; contextTerms: string[]; positiveExamples: string[]; negativeExamples: string[]; boundaries: string[] }>; contexts: Array<{ id: string; name: string; description: string }>; notes: string };
 type Test = { id: string; profile_version_id: string; title: string; source_url: string | null; status: string; result: unknown; error: string | null; created_at: string; updated_at: string };
 type Data = { current: { versionId: string; revision: number } | null; draft: { versionId: string; revision: number } | null; currentProfile: ProfileVersion | null; draftProfile: ProfileVersion | null; history: ProfileVersion[]; tests: Test[] };
 
@@ -24,10 +38,18 @@ export const meta: Route.MetaFunction = () => [{ title: `业务匹配 · ${SITE.
 
 const EMPTY: Profile = { schemaVersion: "1", capabilities: [], contexts: [], notes: "" };
 
+function cloneProfile(profile: Profile): Profile {
+  return JSON.parse(JSON.stringify(profile)) as Profile;
+}
+
+function lines(value: string) {
+  return value.split("\n").map((item) => item.trim()).filter(Boolean);
+}
+
 export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
   const { run, pending } = useAdminAction();
   const initial = useMemo(() => d.draftProfile?.profile ?? d.currentProfile?.profile ?? EMPTY, [d.currentProfile, d.draftProfile]);
-  const [json, setJson] = useState(() => JSON.stringify(initial, null, 2));
+  const [profile, setProfile] = useState(() => cloneProfile(initial));
   const [testTitle, setTestTitle] = useState("");
   const [testBody, setTestBody] = useState("");
   const [draftDialog, setDraftDialog] = useState(false);
@@ -35,29 +57,49 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
   const revision = d.draft?.revision ?? 0;
   const profileVersionId = d.draft?.versionId ?? d.current?.versionId ?? "";
 
+  function updateCapability(index: number, patch: Partial<Capability>) {
+    setProfile((current) => ({ ...current, capabilities: current.capabilities.map((capability, i) => i === index ? { ...capability, ...patch } : capability) }));
+  }
+
+  function updateContext(index: number, patch: Partial<Profile["contexts"][number]>) {
+    setProfile((current) => ({ ...current, contexts: current.contexts.map((context, i) => i === index ? { ...context, ...patch } : context) }));
+  }
+
   async function saveDraft(reason: string) {
-    let profile: unknown;
-    try { profile = JSON.parse(json); } catch { toast("配置必须是合法 JSON", "error"); return false; }
     return (await run("PUT", "/api/admin/business/profile/draft", { profile, expectedRevision: revision, reason }, { label: "business-draft", success: "业务配置草稿已保存" })) !== null;
   }
 
   return (
-    <AdminPage title="业务匹配" subtitle="维护企业能力、测试语义判断并留下人工标注。草稿发布后才会成为新分析任务的配置。">
+    <AdminPage title="业务匹配" subtitle="用表单维护企业能力、测试语义判断并留下人工标注。草稿发布后才会成为新分析任务的配置。">
+      <Card title="怎么使用" className="mb-5">
+        <div className="grid gap-3 md:grid-cols-3">
+          <Step number="1" title="编辑能力" text="每行填写一个词或一个例子。行业只是背景，服务动作和交付成果才是主要判断依据。" />
+          <Step number="2" title="保存草稿" text="先保存，系统会生成一个可回退的版本，不会立即改变正在运行的配置。" />
+          <Step number="3" title="发布并测试" text="确认表单内容后发布，再在下方粘贴公告标题和正文验证 PASS、BLOCK 或待确认。" />
+        </div>
+      </Card>
+
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,.8fr)]">
         <Card title="企业能力配置" right={<span>草稿修订 {revision} · 当前 {d.current?.versionId ?? "未发布"}</span>}>
-          <Field label="配置 JSON" hint="只保存能力、场景、词语与正反例；不支持脚本或任意表达式。">
-            <Textarea className="min-h-[520px] font-mono text-[12px]" value={json} onChange={(e) => setJson(e.target.value)} spellCheck={false} />
-          </Field>
+          <p className="mb-4 text-[13px] leading-relaxed text-ink-3">请按业务能力填写，不需要编写 JSON。列表输入框中每行一条；“正例”帮助模型理解什么值得关注，“反例”帮助模型排除只有设备、材料或泛化服务的项目。</p>
+          <div className="space-y-4">
+            {profile.capabilities.map((capability, index) => (
+              <CapabilityEditor key={capability.id} capability={capability} onChange={(patch) => updateCapability(index, patch)} />
+            ))}
+          </div>
+
+          <div className="mt-5 border-t border-line pt-4">
+            <div className="mb-3 flex items-center justify-between gap-2"><div><h3 className="text-[14px] font-semibold text-ink">业务场景背景</h3><p className="mt-1 text-[12px] text-ink-4">场景只作为上下文，不要把行业名称当成必须命中的业务关键词。</p></div></div>
+            <div className="space-y-3">
+              {profile.contexts.map((context, index) => <div key={context.id} className="rounded-card border border-line bg-bg-sunk p-3"><div className="grid gap-3 sm:grid-cols-[180px_1fr]"><Field label="场景名称"><Input value={context.name} onChange={(e) => updateContext(index, { name: e.target.value })} /></Field><Field label="场景说明"><Input value={context.description} onChange={(e) => updateContext(index, { description: e.target.value })} /></Field></div><div className="mt-2 font-mono text-[11px] text-ink-4">场景 ID：{context.id}</div></div>)}
+            </div>
+          </div>
+
+          <div className="mt-5"><Field label="给模型的总体说明" hint="补充企业边界、优先关注的公告类型或需要人工复核的情况。">
+            <Textarea className="min-h-[100px]" value={profile.notes} onChange={(e) => setProfile((current) => ({ ...current, notes: e.target.value }))} placeholder="例如：优先关注采购意向、招标公告、方案公示和中标信息；只出现硬件采购时通常不相关。" />
+          </Field></div>
           <div className="mt-3 flex flex-wrap gap-2">
-            <ReasonDialog
-              open={draftDialog}
-              title="保存业务配置草稿"
-              description="保存会生成不可变版本，但不会立即改变正在运行的业务分析。"
-              confirmLabel="保存草稿"
-              busy={pending === "business-draft"}
-              onClose={() => setDraftDialog(false)}
-              onSubmit={saveDraft}
-            />
+            <ReasonDialog open={draftDialog} title="保存业务配置草稿" description="保存会生成不可变版本，但不会立即改变正在运行的业务分析。" confirmLabel="保存草稿" busy={pending === "business-draft"} onClose={() => setDraftDialog(false)} onSubmit={saveDraft} />
             <Button tone="primary" onClick={() => setDraftDialog(true)}>保存草稿</Button>
             {d.draft && <Button busy={pending === "business-publish"} onClick={() => run("POST", "/api/admin/business/profile/publish", { versionId: d.draft!.versionId, expectedRevision: revision, reason: "管理员发布业务能力配置" }, { label: "business-publish", success: "业务配置已发布" })}>发布当前草稿</Button>}
           </div>
@@ -65,19 +107,14 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
 
         <Card title="版本历史" pad={false}>
           {d.history.length ? <div className="divide-y divide-line">{d.history.map((v) => (
-            <div key={v.id} className="flex items-start justify-between gap-3 px-4 py-3 text-[13px]">
-              <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-[11px] text-ink-3">{v.id}</span><Badge tone={v.id === d.current?.versionId ? "ok" : v.status === "draft" ? "warn" : "muted"}>{v.id === d.current?.versionId ? "当前" : v.status === "draft" ? "草稿" : "历史"}</Badge></div><div className="mt-1 text-[11.5px] text-ink-4">{bj(v.created_at, true)} · {v.content_hash.slice(0, 12)}</div></div>
-              {v.id !== d.current?.versionId && <Button size="sm" onClick={() => setRollback(v.id)}>回退</Button>}
-            </div>
+            <div key={v.id} className="flex items-start justify-between gap-3 px-4 py-3 text-[13px]"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-[11px] text-ink-3">{v.id}</span><Badge tone={v.id === d.current?.versionId ? "ok" : v.status === "draft" ? "warn" : "muted"}>{v.id === d.current?.versionId ? "当前" : v.status === "draft" ? "草稿" : "历史"}</Badge></div><div className="mt-1 text-[11.5px] text-ink-4">{bj(v.created_at, true)} · {v.content_hash.slice(0, 12)}</div></div>{v.id !== d.current?.versionId && <Button size="sm" onClick={() => setRollback(v.id)}>回退</Button>}</div>
           ))}</div> : <Empty>还没有业务配置版本</Empty>}
         </Card>
       </div>
 
       <Card className="mt-5" title="材料测试" right={<span>测试调用与正式分析使用同一业务结果契约</span>}>
-        <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
-          <Field label="公告标题"><Input value={testTitle} onChange={(e) => setTestTitle(e.target.value)} placeholder="例如：某水库库底高程测量服务" /></Field>
-          <Field label="使用配置版本"><Select value={profileVersionId} disabled><option value={profileVersionId}>{profileVersionId || "请先保存业务配置"}</option></Select></Field>
-        </div>
+        <p className="mb-3 text-[13px] text-ink-3">把人工收集到的真实招标标题和采购范围粘贴进来，用当前已发布版本测试模型是否识别为相关商机。</p>
+        <div className="grid gap-3 lg:grid-cols-[1fr_1fr]"><Field label="公告标题"><Input value={testTitle} onChange={(e) => setTestTitle(e.target.value)} placeholder="例如：某水库库底高程测量服务" /></Field><Field label="使用配置版本"><Select value={profileVersionId} disabled><option value={profileVersionId}>{profileVersionId || "请先保存业务配置"}</option></Select></Field></div>
         <Field label="采购范围或正文"><Textarea className="mt-3 min-h-[160px]" value={testBody} onChange={(e) => setTestBody(e.target.value)} placeholder="粘贴采购需求、服务范围、成果要求等原文" /></Field>
         <Button className="mt-3" tone="primary" disabled={!profileVersionId || !testTitle.trim()} busy={pending === "business-test"} onClick={() => run("POST", "/api/admin/business/tests", { profileVersionId, title: testTitle, body: testBody }, { label: "business-test", success: "测试已提交，等待分析任务处理" })}>提交测试</Button>
       </Card>
@@ -89,6 +126,23 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
       <ReasonDialog open={!!rollback} title="回退业务配置" description="回退只切换当前版本指针，历史版本和已经产生的分析结果不会被覆盖。" confirmLabel="确认回退" busy={pending === "business-rollback"} onClose={() => setRollback(null)} onSubmit={async (reason) => (await run("POST", "/api/admin/business/profile/rollback", { versionId: rollback, reason }, { label: "business-rollback", success: "已回退业务配置" })) !== null} />
     </AdminPage>
   );
+}
+
+function Step({ number, title, text }: { number: string; title: string; text: string }) {
+  return <div className="rounded-card border border-line bg-bg-sunk p-3"><div className="flex items-center gap-2"><span className="grid h-6 w-6 place-items-center rounded-full bg-hot text-[12px] font-semibold text-white">{number}</span><span className="font-medium text-ink">{title}</span></div><p className="mt-2 text-[12px] leading-relaxed text-ink-3">{text}</p></div>;
+}
+
+function CapabilityEditor({ capability, onChange }: { capability: Capability; onChange: (patch: Partial<Capability>) => void }) {
+  return <div className="rounded-card border border-line bg-bg-sunk p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><h3 className="text-[15px] font-semibold text-ink">{capability.name || "未命名能力"}</h3><Badge tone="muted">{capability.id}</Badge></div><p className="mt-1 text-[12px] text-ink-4">{capability.description || "请填写这项能力的业务边界"}</p></div><label className="flex items-center gap-2 text-[12px] text-ink-2"><input type="checkbox" checked={capability.enabled} onChange={(e) => onChange({ enabled: e.target.checked })} />启用</label></div>
+    <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_150px]"><Field label="能力名称"><Input value={capability.name} onChange={(e) => onChange({ name: e.target.value })} /></Field><Field label="优先级"><Select value={capability.priority} onChange={(e) => onChange({ priority: e.target.value as Priority })}><option value="重点">重点</option><option value="常规">常规</option><option value="观察">观察</option></Select></Field></div>
+    <div className="mt-3"><Field label="能力说明"><Textarea value={capability.description} onChange={(e) => onChange({ description: e.target.value })} /></Field></div>
+    <div className="mt-3 grid gap-3 lg:grid-cols-2"><ListEditor label="服务动作" hint="例如：测量、整理、数字化、监测、系统建设" values={capability.serviceTerms} onChange={(serviceTerms) => onChange({ serviceTerms })} /><ListEditor label="方法与技术" hint="例如：无人机、多波束、GIS、数据治理" values={capability.methodTerms} onChange={(methodTerms) => onChange({ methodTerms })} /><ListEditor label="交付成果" hint="例如：测量成果、档案数字化成果、平台软件" values={capability.deliverableTerms} onChange={(deliverableTerms) => onChange({ deliverableTerms })} /><ListEditor label="对象与场景" hint="例如：水库、矿山、机关档案、政务平台" values={capability.contextTerms} onChange={(contextTerms) => onChange({ contextTerms })} /><ListEditor label="相关正例" hint="粘贴或概括应当命中的真实项目标题" values={capability.positiveExamples} onChange={(positiveExamples) => onChange({ positiveExamples })} /><ListEditor label="无关反例" hint="明确哪些相似项目应排除" values={capability.negativeExamples} onChange={(negativeExamples) => onChange({ negativeExamples })} /></div>
+    <ListEditor className="mt-3" label="边界与排除规则" hint="例如：只有设备供货、耗材采购且没有服务交付时排除" values={capability.boundaries} onChange={(boundaries) => onChange({ boundaries })} />
+  </div>;
+}
+
+function ListEditor({ label, hint, values, onChange, className = "" }: { label: string; hint: string; values: string[]; onChange: (values: string[]) => void; className?: string }) {
+  return <div className={className}><Field label={label} hint={`${hint}；每行一条`}><Textarea className="min-h-[84px]" value={values.join("\n")} onChange={(e) => onChange(lines(e.target.value))} /></Field></div>;
 }
 
 function TestRow({ test, run, pending }: { test: Test; run: ReturnType<typeof useAdminAction>["run"]; pending: string | null }) {
