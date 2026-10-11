@@ -79,7 +79,7 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
   }
 
   return (
-    <AdminPage title="业务匹配" subtitle="用表单维护企业能力、测试语义判断并留下人工标注。草稿发布后才会成为新分析任务的配置。">
+    <AdminPage className="max-w-[1680px]" title="业务匹配" subtitle="用表单维护企业能力、测试语义判断并留下人工标注。草稿发布后才会成为新分析任务的配置。">
       <Card title="怎么使用" className="mb-5">
         <div className="grid gap-3 md:grid-cols-3">
           <Step number="1" title="编辑能力" text="每行填写一个词或一个例子。行业只是背景，服务动作和交付成果才是主要判断依据。" />
@@ -88,7 +88,7 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
         </div>
       </Card>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,.8fr)]">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
         <Card title="企业能力配置" right={<span>草稿修订 {revision} · 当前 {d.current?.versionId ?? "未发布"}</span>}>
           <p className="mb-4 text-[13px] leading-relaxed text-ink-3">请按业务能力填写，不需要编写 JSON。每项能力单独一个 Tab；列表输入框中每行一条。“正例”帮助模型理解什么值得关注，“反例”帮助模型排除只有设备、材料或泛化服务的项目。</p>
           <div className="mb-4 flex gap-1 overflow-x-auto border-b border-line pb-px">
@@ -105,7 +105,7 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
           </div>
         </Card>
 
-        <Card title="版本历史" pad={false}>
+        <Card className="xl:sticky xl:top-6" title="版本历史" pad={false}>
           {d.history.length ? <div className="divide-y divide-line">{d.history.map((v) => (
             <div key={v.id} className="flex items-start justify-between gap-3 px-4 py-3 text-[13px]"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-[11px] text-ink-3">{v.id}</span><Badge tone={v.id === d.current?.versionId ? "ok" : v.status === "draft" ? "warn" : "muted"}>{v.id === d.current?.versionId ? "当前" : v.status === "draft" ? "草稿" : "历史"}</Badge></div><div className="mt-1 text-[11.5px] text-ink-4">{bj(v.created_at, true)} · {v.content_hash.slice(0, 12)}</div></div>{v.id !== d.current?.versionId && <Button size="sm" onClick={() => setRollback(v.id)}>回退</Button>}</div>
           ))}</div> : <Empty>还没有业务配置版本</Empty>}
@@ -129,7 +129,7 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
 }
 
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
-  return <button type="button" onClick={onClick} className={`shrink-0 rounded-t-control px-3 py-2 text-[12.5px] font-medium transition-colors ${active ? "bg-ink text-bg" : "text-ink-3 hover:bg-bg-sunk hover:text-ink"}`}>{children}</button>;
+  return <button type="button" onClick={onClick} className={`shrink-0 rounded-t-control px-4 py-2.5 text-[13px] font-medium transition-colors ${active ? "bg-ink text-bg" : "text-ink-3 hover:bg-bg-sunk hover:text-ink"}`}>{children}</button>;
 }
 
 function Step({ number, title, text }: { number: string; title: string; text: string }) {

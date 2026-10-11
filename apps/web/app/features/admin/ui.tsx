@@ -5,9 +5,9 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
 import { ago, bj } from "./format";
 
-export function AdminPage({ title, subtitle, actions, children }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; children: ReactNode }) {
+export function AdminPage({ title, subtitle, actions, children, className = "" }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <div className="mx-auto w-full max-w-[1320px] px-4 pb-24 pt-6 sm:px-6 lg:px-8 lg:pt-8">
+    <div className={`mx-auto w-full max-w-[1320px] px-4 pb-24 pt-6 sm:px-6 lg:px-8 lg:pt-8 ${className}`}>
       <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-[22px] font-semibold tracking-tight text-ink sm:text-[24px]">{title}</h1>
