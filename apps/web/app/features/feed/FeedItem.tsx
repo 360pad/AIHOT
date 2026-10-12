@@ -11,6 +11,7 @@ import { ScoreLabel } from "../../components/ui/Score";
 import { MediaThumbs, SourceLine, StarButton } from "./parts";
 import { GroupDevelopments, GroupSources, LatestDevelopment } from "./ReadingGroup";
 import { QuotedLine } from "../item/QuotedPost";
+import { beijingDate } from "../../lib/format";
 
 export interface FeedItemProps {
   item: FeedItemSummary;
@@ -131,7 +132,9 @@ function RadarFeedItem({ item, filters, read, onOpen }: Pick<FeedItemProps, "ite
   const open = () => onOpen?.(item.id);
   const category = item.category ? CATEGORY_LABELS[item.category] : "综合商机";
   const stage = filters?.stage === "tender" || !filters?.stage ? "公开招标" : STAGE_LABELS[filters.stage];
+  const procurement = filters?.stage === "tender" || !filters?.stage ? "公开招标" : "待核实";
   const scope = item.reason?.replace(/^推荐理由：?\s*/, "") || item.summary || "项目范围与采购要求待核实。";
+  const published = item.publishedAt ? beijingDate(item.publishedAt).replace(/-/g, ".") : "待核实";
   return (
     <article className="radar-feed-card" data-item-id={item.id}>
       <div className="radar-item-main">
@@ -149,6 +152,12 @@ function RadarFeedItem({ item, filters, read, onOpen }: Pick<FeedItemProps, "ite
           <span><IconChevronRight size={15} />{stage}</span>
         </div>
         <p className="radar-item-summary">项目范围：{scope}</p>
+      </div>
+      <div className="radar-item-facts" aria-label="项目关键信息">
+        <span><b>信息来源</b><em>{item.source.name}</em></span>
+        <span><b>采购方式</b><em>{procurement}</em></span>
+        <span><b>所属行业</b><em>{category}</em></span>
+        <span><b>发布日期</b><em>{published}</em></span>
       </div>
       <div className="radar-item-metric">
         <span>预算金额</span>

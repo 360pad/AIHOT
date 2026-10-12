@@ -69,7 +69,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
+      <div className="lg:grid lg:grid-cols-[280px_minmax(0,1fr)]">
         <IndustryNav category={filters.category} />
         <section className="radar-home-main min-w-0">
           <div className="hidden lg:block">

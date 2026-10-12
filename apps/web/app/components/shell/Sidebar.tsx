@@ -67,7 +67,7 @@ export function Sidebar({ changelogVersion }: { changelogVersion: string | null 
   const { pathname } = useLocation();
   const home = pathname === "/";
   return (
-    <aside className="radar-sidebar sticky top-0 hidden h-dvh w-[216px] shrink-0 flex-col border-r border-line bg-sidebar px-3.5 pb-3.5 pt-5 lg:flex">
+    <aside className="radar-sidebar sticky top-0 hidden h-dvh w-[280px] shrink-0 flex-col border-r border-line bg-sidebar px-4 pb-3.5 pt-5 lg:flex">
       <Link to="/" className="radar-brand mb-5 flex min-h-[61px] items-start px-1 text-ink" aria-label={`${SITE.name} 首页`}>
         <span>
           <Wordmark size={23} />

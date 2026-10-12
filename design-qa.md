@@ -11,7 +11,7 @@
 
 ## Full-view comparison
 
-The final capture was opened after the Docker build and compared with the source visual. The three-column proportions align: 216px business sidebar, 248px industry navigation, and the remaining content workspace. The cool blue palette, title block, update copy, search/filter toolbar, timeline rail, AI score pills, and right-side budget/deadline columns are all present in the same order and density.
+The final capture was opened after the latest Docker build and compared with the source visual and the user's red-box review screenshot. The three-column proportions now use a 280px business sidebar, a 280px industry navigation column, and the remaining content workspace. The cool blue palette, title block, update copy, search/filter toolbar, timeline rail, AI score pills, and right-side budget/deadline columns remain in the same order. Each timeline row now uses a compact four-cell facts block for source, procurement method, industry, and publication date, so the middle workspace is intentional rather than empty.
 
 ## Focused regions
 
@@ -28,6 +28,7 @@ No actionable P0/P1/P2 visual findings remain. The live data count and article w
 1. Initial implementation had a warm paper palette, a 180px sidebar, a 190px industry column, card containers, and a search placeholder that did not match the mockup. Fixed by adding the scoped radar shell palette, 216/248px shell columns, flat timeline rows, right metric columns, and mockup copy.
 2. The first visual pass had the timeline card content 22px too far left and raw yuan amounts in the budget column. Fixed by widening the rail track and normalizing amounts to 万元 with thousands separators.
 3. Final pass updated the industry icon rhythm, search placeholder, and date row to `今天 / 共 N 条`; interaction checks for industry navigation, stage navigation, and search all completed without console warnings or errors.
+4. The visual review found the business-stage sidebar too narrow and the card center too empty. Widened the sidebar and industry column to 280px, increased navigation hit areas, and added the facts block between the project summary and budget/deadline metrics without changing the deferred regional filtering scope. Rebuilt Docker and rechecked the all-industry and smart-water homepage states.
 
 ## Implementation Checklist
 
@@ -36,6 +37,7 @@ No actionable P0/P1/P2 visual findings remain. The live data count and article w
 - [x] Preserve stage and industry navigation as working links.
 - [x] Preserve the timeline rail and AI scoring.
 - [x] Add budget and deadline metric columns with real-data fallbacks.
+- [x] Balance the wide desktop workspace with a project facts block between summary and metrics.
 - [x] Rebuild Docker Desktop services and verify the page responds.
 - [x] Check browser console logs and primary interactions.
 
