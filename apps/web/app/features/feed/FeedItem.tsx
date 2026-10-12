@@ -122,19 +122,40 @@ function budgetOf(item: FeedItemSummary) {
   return `${formatted}${match[2]}`;
 }
 
-function deadlineOf(item: FeedItemSummary) {
+function deadlineParts(item: FeedItemSummary) {
   const text = `${item.title} ${item.summary ?? ""}`;
   const match = text.match(/(?:截止|开标|响应文件提交)[^，。；;]{0,18}?((?:20\d{2}年)?\d{1,2}月\d{1,2}日(?:[\d:：点时分]{0,12})?)/);
-  return match?.[1]?.replace(/：/g, ":") ?? "待核实";
+  const label = match?.[1]?.replace(/：/g, ":");
+  if (!label) return null;
+  const date = label.match(/^(?:(20\d{2})年)?(\d{1,2})月(\d{1,2})日/);
+  if (!date) return { label, day: null };
+  const year = Number(date[1] ?? beijingDate(Date.now()).slice(0, 4));
+  const month = Number(date[2]);
+  const day = Number(date[3]);
+  return { label, day: Date.parse(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T00:00:00Z`) };
+}
+
+function deadlineOf(item: FeedItemSummary) {
+  return deadlineParts(item)?.label ?? "待核实";
+}
+
+function daysRemainingOf(item: FeedItemSummary) {
+  const deadline = deadlineParts(item);
+  if (!deadline?.day) return { label: "待核实", tone: "unknown" as const };
+  const today = Date.parse(`${beijingDate(Date.now())}T00:00:00Z`);
+  const days = Math.round((deadline.day - today) / 86400000);
+  if (days < 0) return { label: "已截止", tone: "expired" as const };
+  if (days === 0) return { label: "今日截止", tone: "urgent" as const };
+  return { label: `剩 ${days} 天`, tone: days <= 7 ? "urgent" as const : "normal" as const };
 }
 
 function RadarFeedItem({ item, filters, read, onOpen }: Pick<FeedItemProps, "item" | "filters" | "read" | "onOpen">) {
   const open = () => onOpen?.(item.id);
   const category = item.category ? CATEGORY_LABELS[item.category] : "综合商机";
   const stage = filters?.stage === "tender" || !filters?.stage ? "公开招标" : STAGE_LABELS[filters.stage];
-  const procurement = filters?.stage === "tender" || !filters?.stage ? "公开招标" : "待核实";
   const scope = item.reason?.replace(/^推荐理由：?\s*/, "") || item.summary || "项目范围与采购要求待核实。";
   const published = item.publishedAt ? beijingDate(item.publishedAt).replace(/-/g, ".") : "待核实";
+  const remaining = daysRemainingOf(item);
   return (
     <article className="radar-feed-card" data-item-id={item.id}>
       <div className="radar-item-main">
@@ -153,19 +174,21 @@ function RadarFeedItem({ item, filters, read, onOpen }: Pick<FeedItemProps, "ite
         </div>
         <p className="radar-item-summary">项目范围：{scope}</p>
       </div>
-      <div className="radar-item-facts" aria-label="项目关键信息">
-        <span><b>信息来源</b><em>{item.source.name}</em></span>
-        <span><b>采购方式</b><em>{procurement}</em></span>
-        <span><b>所属行业</b><em>{category}</em></span>
-        <span><b>发布日期</b><em>{published}</em></span>
-      </div>
-      <div className="radar-item-metric">
+      <div className="radar-item-metric radar-item-budget">
         <span>预算金额</span>
         <strong>{budgetOf(item)}</strong>
       </div>
-      <div className="radar-item-metric">
-        <span>截止时间</span>
+      <div className="radar-item-metric radar-item-published">
+        <span>发布日期</span>
+        <strong>{published}</strong>
+      </div>
+      <div className="radar-item-metric radar-item-deadline">
+        <span>截止日期</span>
         <strong>{deadlineOf(item)}</strong>
+      </div>
+      <div className={`radar-item-metric radar-item-countdown is-${remaining.tone}`}>
+        <span>距投标</span>
+        <strong>{remaining.label}</strong>
       </div>
     </article>
   );
