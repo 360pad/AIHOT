@@ -105,7 +105,7 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
   }
 
   return (
-    <AdminPage className="max-w-[1680px]" title="业务匹配" subtitle="用表单维护企业能力、测试语义判断并留下人工标注。草稿发布后才会成为新分析任务的配置。">
+    <AdminPage className="max-w-none" title="业务匹配" subtitle="用表单维护企业能力、测试语义判断并留下人工标注。草稿发布后才会成为新分析任务的配置。">
       <Card title="怎么使用" className="mb-5">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <Step number="1" title="编辑能力" text="每行填写一个词或一个例子。行业只是背景，服务动作和交付成果才是主要判断依据。" />
@@ -115,31 +115,38 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
         </div>
       </Card>
 
-      <div className="grid items-start gap-5 lg:grid-cols-[224px_minmax(0,1fr)]">
-        <Card className="lg:sticky lg:top-6" title="业务配置" pad={false}>
-          <nav aria-label="业务配置二级导航" className="p-2">
-            <SubnavSection title="业务能力" hint="公司能提供什么服务">
-              {profile.capabilities.map((capability) => <SubnavItem key={capability.id} active={activeTab === capability.id} onClick={() => setActiveTab(capability.id)}>{capability.name || "未命名能力"}</SubnavItem>)}
-              <SubnavAction onClick={addCapability}>＋ 新建业务能力</SubnavAction>
-            </SubnavSection>
-            <SubnavSection title="应用场景" hint="项目发生在哪里、服务谁">
-              <SubnavItem active={activeTab === "contexts"} onClick={() => setActiveTab("contexts")}>场景配置</SubnavItem>
-              <SubnavAction onClick={addContext}>＋ 新建应用场景</SubnavAction>
-            </SubnavSection>
-            <SubnavSection title="查看与验证" hint="核对配置和测试材料">
-              <SubnavItem active={activeTab === "json"} onClick={() => setActiveTab("json")}>JSON 预览</SubnavItem>
-            </SubnavSection>
-          </nav>
-        </Card>
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <Card className="overflow-hidden" pad={false}>
+          <div className="grid border-b border-line lg:grid-cols-[224px_minmax(0,1fr)]">
+            <div className="border-b border-line bg-bg-sunk/45 px-4 py-3 lg:border-b-0 lg:border-r"><h2 className="text-[14px] font-semibold text-ink">业务配置</h2></div>
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"><h2 className="text-[14px] font-semibold text-ink">企业能力配置</h2><span className="text-[12.5px] text-ink-3">草稿修订 {revision} · 当前 {d.current?.versionId ?? "未发布"}</span></div>
+          </div>
+          <div className="grid items-stretch lg:grid-cols-[224px_minmax(0,1fr)]">
+            <aside className="border-b border-line bg-bg-sunk/45 p-2 lg:border-b-0 lg:border-r">
+              <nav aria-label="业务配置二级导航">
+                <SubnavSection title="业务能力" hint="公司能提供什么服务">
+                  {profile.capabilities.map((capability) => <SubnavItem key={capability.id} active={activeTab === capability.id} onClick={() => setActiveTab(capability.id)}>{capability.name || "未命名能力"}</SubnavItem>)}
+                  <SubnavAction onClick={addCapability}>＋ 新建业务能力</SubnavAction>
+                </SubnavSection>
+                <SubnavSection title="应用场景" hint="项目发生在哪里、服务谁">
+                  <SubnavItem active={activeTab === "contexts"} onClick={() => setActiveTab("contexts")}>场景配置</SubnavItem>
+                  <SubnavAction onClick={addContext}>＋ 新建应用场景</SubnavAction>
+                </SubnavSection>
+                <SubnavSection title="查看与验证" hint="核对配置和测试材料">
+                  <SubnavItem active={activeTab === "json"} onClick={() => setActiveTab("json")}>JSON 预览</SubnavItem>
+                </SubnavSection>
+              </nav>
+            </aside>
 
-        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <Card title="企业能力配置" right={<span>草稿修订 {revision} · 当前 {d.current?.versionId ?? "未发布"}</span>}>
-          <p className="mb-4 text-[13px] leading-relaxed text-ink-3">从左侧选择要维护的业务能力或应用场景，右侧只显示当前编辑内容。业务能力回答“公司能做什么”，应用场景补充“项目发生在哪里、服务谁”。</p>
+            <div className="min-w-0 p-4">
+              <p className="mb-4 text-[13px] leading-relaxed text-ink-3">从左侧选择要维护的业务能力或应用场景，右侧只显示当前编辑内容。业务能力回答“公司能做什么”，应用场景补充“项目发生在哪里、服务谁”。</p>
 
-          {activeTab === "json" ? <div className="rounded-card border border-line bg-bg-sunk p-3"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-[14px] font-semibold text-ink">当前表单生成的 JSON</h3><p className="mt-1 text-[12px] text-ink-4">只读预览，保存草稿时提交的就是这份内容。</p></div><Button size="sm" onClick={() => { void copyJson(); }}>{copied ? "已复制" : "复制 JSON"}</Button></div><pre className="max-h-[620px] overflow-auto rounded-control bg-surface p-3 text-[11.5px] leading-relaxed text-ink-2">{json}</pre></div> : activeTab === "contexts" ? <div className="space-y-4"><div><h3 className="text-[14px] font-semibold text-ink">应用场景配置</h3><p className="mt-1 text-[12px] text-ink-4">场景只提供上下文，不是公司的服务能力；例如“水利”和“矿山”都可以使用“测绘”能力。</p></div><div className="space-y-3">{profile.contexts.map((context, index) => <div key={context.id} className="rounded-card border border-line bg-bg-sunk p-3"><div className="grid gap-3 sm:grid-cols-[180px_1fr]"><Field label="场景名称"><Input value={context.name} onChange={(e) => updateContext(index, { name: e.target.value })} /></Field><Field label="场景说明"><Input value={context.description} onChange={(e) => updateContext(index, { description: e.target.value })} /></Field></div><div className="mt-2 font-mono text-[11px] text-ink-4">场景 ID：{context.id}</div></div>)}</div><Field label="给模型的总体说明" hint="补充企业边界、优先关注的公告类型或需要人工复核的情况。"><Textarea className="min-h-[100px]" value={profile.notes} onChange={(e) => setProfile((current) => ({ ...current, notes: e.target.value }))} placeholder="例如：优先关注采购意向、招标公告、方案公示和中标信息；只出现硬件采购时通常不相关。" /></Field></div> : profile.capabilities.map((capability, index) => capability.id === activeTab && <CapabilityEditor key={capability.id} capability={capability} onChange={(patch) => updateCapability(index, patch)} />)}
-          <div className="mt-3 flex flex-wrap gap-2">
-            <ReasonDialog open={draftDialog} title="保存业务配置草稿" description="保存会生成不可变版本，但不会立即改变正在运行的业务分析。" confirmLabel="保存草稿" busy={pending === "business-draft"} onClose={() => setDraftDialog(false)} onSubmit={saveDraft} />
-            <Button tone="primary" onClick={() => setDraftDialog(true)}>保存草稿</Button>
+              {activeTab === "json" ? <div className="rounded-card border border-line bg-bg-sunk p-3"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-[14px] font-semibold text-ink">当前表单生成的 JSON</h3><p className="mt-1 text-[12px] text-ink-4">只读预览，保存草稿时提交的就是这份内容。</p></div><Button size="sm" onClick={() => { void copyJson(); }}>{copied ? "已复制" : "复制 JSON"}</Button></div><pre className="max-h-[620px] overflow-auto rounded-control bg-surface p-3 text-[11.5px] leading-relaxed text-ink-2">{json}</pre></div> : activeTab === "contexts" ? <div className="space-y-4"><div><h3 className="text-[14px] font-semibold text-ink">应用场景配置</h3><p className="mt-1 text-[12px] text-ink-4">场景只提供上下文，不是公司的服务能力；例如“水利”和“矿山”都可以使用“测绘”能力。</p></div><div className="space-y-3">{profile.contexts.map((context, index) => <div key={context.id} className="rounded-card border border-line bg-bg-sunk p-3"><div className="grid gap-3 sm:grid-cols-[180px_1fr]"><Field label="场景名称"><Input value={context.name} onChange={(e) => updateContext(index, { name: e.target.value })} /></Field><Field label="场景说明"><Input value={context.description} onChange={(e) => updateContext(index, { description: e.target.value })} /></Field></div><div className="mt-2 font-mono text-[11px] text-ink-4">场景 ID：{context.id}</div></div>)}</div><Field label="给模型的总体说明" hint="补充企业边界、优先关注的公告类型或需要人工复核的情况。"><Textarea className="min-h-[100px]" value={profile.notes} onChange={(e) => setProfile((current) => ({ ...current, notes: e.target.value }))} placeholder="例如：优先关注采购意向、招标公告、方案公示和中标信息；只出现硬件采购时通常不相关。" /></Field></div> : profile.capabilities.map((capability, index) => capability.id === activeTab && <CapabilityEditor key={capability.id} capability={capability} onChange={(patch) => updateCapability(index, patch)} />)}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <ReasonDialog open={draftDialog} title="保存业务配置草稿" description="保存会生成不可变版本，但不会立即改变正在运行的业务分析。" confirmLabel="保存草稿" busy={pending === "business-draft"} onClose={() => setDraftDialog(false)} onSubmit={saveDraft} />
+                <Button tone="primary" onClick={() => setDraftDialog(true)}>保存草稿</Button>
+              </div>
+            </div>
           </div>
         </Card>
 
@@ -148,7 +155,6 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
             <div key={v.id} className="flex items-start justify-between gap-3 px-4 py-3 text-[13px]"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-[11px] text-ink-3">{v.id}</span><Badge tone={v.id === d.current?.versionId ? "ok" : v.status === "draft" ? "warn" : "muted"}>{v.id === d.current?.versionId ? "当前" : v.status === "draft" ? "草稿" : "历史"}</Badge></div><div className="mt-1 text-[11.5px] text-ink-4">{bj(v.created_at, true)} · {v.content_hash.slice(0, 12)}</div></div>{v.id !== d.current?.versionId && <Button size="sm" onClick={() => setRollback(v.id)}>回退</Button>}</div>
           ))}</div> : <Empty>还没有业务配置版本</Empty>}
         </Card>
-        </div>
       </div>
 
       <Card className="mt-5" title="材料测试" right={<span>测试调用与正式分析使用同一业务结果契约</span>}>
