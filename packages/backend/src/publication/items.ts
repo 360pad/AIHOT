@@ -1,6 +1,6 @@
 // Public read layer, item level. Every exit (site API, v1, RSS, MCP, sitemap) reads
 // items through these functions; visibility, release gate and body licences are applied here.
-import type { CategoryKey, ChannelKey } from "@aihot/contracts/taxonomy";
+import type { CategoryKey, ChannelKey, StageKey } from "@aihot/contracts/taxonomy";
 import type { FeedItemSummary, ItemSummary, MediaView, SourceKind, XPostView } from "@aihot/contracts/site";
 import { sql, type Db } from "../db.ts";
 import { proxiedImage, proxiedImageSet } from "../media/imgproxy.ts";
@@ -105,6 +105,31 @@ export function tagCondition(tag: string | null | undefined) {
 export function topicCondition(topicTags: string[] | null | undefined) {
   if (!topicTags || topicTags.length === 0) return sql``;
   return sql`AND p.tags && ${topicTags}::text[]`;
+}
+
+const STAGE_ITEM_TYPES: Record<StageKey, string[]> = {
+  tender: ["tender_notice"],
+  preBid: ["procurement_intention", "tender_plan", "pre_bid_notice"],
+  award: ["award_result"],
+};
+
+const STAGE_TAGS: Record<StageKey, string[]> = {
+  tender: ["招标公告"],
+  preBid: ["采购意向", "招标计划", "标前信息"],
+  award: ["中标及结果"],
+};
+
+/** Stage is stored in the analysis output today; tags keep older publications filterable. */
+export function stageCondition(stage: StageKey | null | undefined) {
+  if (!stage) return sql``;
+  return sql`AND (
+    EXISTS (
+      SELECT 1 FROM analyses an
+      WHERE an.id = p.analysis_id
+        AND an.output->>'itemType' = ANY(${STAGE_ITEM_TYPES[stage]}::text[])
+    )
+    OR p.tags && ${STAGE_TAGS[stage]}::text[]
+  )`;
 }
 
 function mediaView(m: Record<string, any>, mode: "card" | "thumb" | "full" = "thumb", responsive = false): MediaView | null {

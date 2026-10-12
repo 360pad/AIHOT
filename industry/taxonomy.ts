@@ -16,6 +16,18 @@ export const ITEM_TYPES = [
   "policy_market_signal",
 ] as const;
 
+export const STAGE_KEYS = ["tender", "preBid", "award"] as const;
+export type StageKey = (typeof STAGE_KEYS)[number];
+export const STAGE_LABELS: Record<StageKey, string> = {
+  tender: "招标采购",
+  preBid: "标前信息",
+  award: "中标信息",
+};
+
+export function isStageKey(value: string): value is StageKey {
+  return (STAGE_KEYS as readonly string[]).includes(value);
+}
+
 export const CATEGORY_TAGS = [
   "智慧水利",
   "城市治理与数字政府",

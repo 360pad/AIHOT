@@ -1,6 +1,7 @@
 // Public vocabularies shared by the website, the API and the worker. The categories themselves belong to
 // the industry pack (industry/taxonomy.ts); their keys are external identities (URLs, API, RSS).
-import { CATEGORIES } from "@aihot/industry/taxonomy";
+import { CATEGORIES, STAGE_KEYS } from "@aihot/industry/taxonomy";
+export { STAGE_KEYS, STAGE_LABELS } from "@aihot/industry/taxonomy";
 
 export type CategoryKey = (typeof CATEGORIES)[number]["key"];
 export const CATEGORY_KEYS = CATEGORIES.map((c) => c.key) as unknown as readonly [CategoryKey, ...CategoryKey[]];
@@ -32,6 +33,12 @@ export const CHANNEL_LABELS: Record<ChannelKey, string> = {
 
 export function isChannelKey(value: unknown): value is ChannelKey {
   return typeof value === "string" && (CHANNEL_KEYS as readonly string[]).includes(value);
+}
+
+export type StageKey = (typeof STAGE_KEYS)[number];
+
+export function isStageKey(value: unknown): value is StageKey {
+  return typeof value === "string" && (STAGE_KEYS as readonly string[]).includes(value);
 }
 
 export const LEADERBOARD_PUBLIC_BOARDS = ["overall", "coding", "reasoning", "knowledge", "professional"] as const;

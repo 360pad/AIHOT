@@ -2,13 +2,13 @@ import { SITE, withSubject } from "@aihot/industry/site";
 import { data as withHeaders, redirect, useLoaderData } from "react-router";
 import type { Route } from "./+types/home";
 import type { TimelineResponse } from "@aihot/contracts/site";
-import { isCategoryKey, isChannelKey } from "@aihot/contracts/taxonomy";
+import { isCategoryKey, isChannelKey, isStageKey, STAGE_LABELS, CATEGORY_LABELS } from "@aihot/contracts/taxonomy";
 import { loadOr404, queryString, releaseBoundCache } from "../lib/api.server";
 import { listPath, organizationLd, pageMeta } from "../lib/seo";
 import { Wordmark } from "../components/Logo";
 import { Timeline } from "../features/feed/Timeline";
 import { HotTopics } from "../features/feed/HotTopics";
-import { CategoryTabs, SearchField, SearchIconLink } from "../features/feed/Filters";
+import { IndustryNav, SearchField, SearchIconLink, StageNav } from "../features/feed/Filters";
 import { beijingDate, beijingWeekday } from "../lib/format";
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -18,17 +18,19 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (q && q.trim()) throw redirect(`/all${url.search}`);
   const channelParam = url.searchParams.get("channel") ?? "all";
   const categoryParam = url.searchParams.get("category");
+  const stageParam = url.searchParams.get("stage") ?? "tender";
   const channel = isChannelKey(channelParam) ? channelParam : "all";
   const category = categoryParam && isCategoryKey(categoryParam) ? categoryParam : null;
+  const stage = isStageKey(stageParam) ? stageParam : "tender";
   const tag = url.searchParams.get("tag")?.trim() || null;
   const upstream = new Headers();
-  const data = await loadOr404<TimelineResponse>(`/api/site/timeline${queryString({ channel: channel === "all" ? null : channel, category, tag })}`, { responseHeaders: upstream, signal: request.signal });
-  return withHeaders({ data, filters: { channel, category, tag, topic: null } }, { headers: releaseBoundCache(data.refreshAt, 60, Date.now(), upstream) });
+  const data = await loadOr404<TimelineResponse>(`/api/site/timeline${queryString({ channel: channel === "all" ? null : channel, category, stage, tag })}`, { responseHeaders: upstream, signal: request.signal });
+  return withHeaders({ data, filters: { channel, category, stage, tag, topic: null } }, { headers: releaseBoundCache(data.refreshAt, 60, Date.now(), upstream) });
 }
 
 export function meta({ loaderData }: Route.MetaArgs) {
   const f = loaderData?.filters;
-  const path = listPath("/", { channel: f && f.channel !== "all" ? f.channel : null, category: f?.category, tag: f?.tag });
+  const path = listPath("/", { channel: f && f.channel !== "all" ? f.channel : null, category: f?.category, stage: f?.stage, tag: f?.tag });
   return pageMeta({ path, jsonLd: path === "/" ? organizationLd() : undefined });
 }
 
@@ -48,7 +50,9 @@ function TodayLabel() {
 
 export default function Home() {
   const { data, filters } = useLoaderData<typeof loader>();
-  const title = filters.tag ? `#${filters.tag}` : "精选";
+  const stage = filters.stage ?? "tender";
+  const title = filters.tag ? `#${filters.tag}` : STAGE_LABELS[stage];
+  const industry = filters.category ? CATEGORY_LABELS[filters.category] : "全部行业";
   return (
     <div className="pb-6">
       {/* Phones: brand bar, today's hot topics, then the feed under "最新精选". */}
@@ -56,23 +60,31 @@ export default function Home() {
         <Wordmark size={20} className="text-ink" />
         <TodayLabel />
       </div>
-      <div className="hidden lg:block">
-        <h1 className="text-[24px] font-semibold leading-[1.3] text-ink">{title}</h1>
-        <div className="mb-5 mt-4 flex items-center justify-between gap-4">
-          <CategoryTabs base="/" category={filters.category} channel={filters.channel} layoutId="home-cat-desk" className="min-w-0" />
-          <SearchField variant="track" keep={{ category: filters.category }} />
+      <div className="mt-3 lg:hidden">
+        <StageNav stage={stage} className="-mx-1 px-1" />
+        <div className="mt-2 flex items-center gap-2">
+          <IndustryNav category={filters.category} mobile className="min-w-0 flex-1" />
+          <SearchIconLink />
         </div>
       </div>
 
-      {data.hot && <HotTopics entries={data.hot} />}
+      <div className="lg:grid lg:grid-cols-[190px_minmax(0,1fr)] lg:gap-7">
+        <IndustryNav category={filters.category} />
+        <section className="min-w-0">
+          <div className="hidden lg:block">
+            <p className="text-[12px] font-medium text-ink-4">{STAGE_LABELS[stage]}</p>
+            <h1 className="mt-1 text-[24px] font-semibold leading-[1.3] text-ink">{title} · {industry}</h1>
+            <div className="mb-5 mt-4 flex items-center justify-end gap-4">
+              <SearchField variant="track" keep={{ category: filters.category, stage }} />
+            </div>
+          </div>
 
-      <h2 className="mt-6 text-[20px] font-bold text-ink lg:hidden">{filters.tag ? title : "最新精选"}</h2>
-      <div className="-mx-4 mt-3 flex items-center gap-2 pl-4 pr-2 lg:hidden">
-        <CategoryTabs base="/" category={filters.category} channel={filters.channel} layoutId="home-cat-mobile" size="sm" className="min-w-0 flex-1" />
-        <SearchIconLink />
+          {data.hot && <HotTopics entries={data.hot} />}
+
+          <h2 className="mt-6 text-[20px] font-bold text-ink lg:hidden">{filters.tag ? title : `${STAGE_LABELS[stage]} · ${industry}`}</h2>
+          <Timeline initial={data} filters={data.filters} />
+        </section>
       </div>
-
-      <Timeline initial={data} filters={data.filters} />
     </div>
   );
 }

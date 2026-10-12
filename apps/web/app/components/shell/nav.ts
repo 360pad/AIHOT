@@ -3,8 +3,9 @@ import { withSubject } from "@aihot/industry/site";
 import { FEATURES } from "@aihot/industry/features";
 import type { ReactNode } from "react";
 import {
-  IconApps, IconBolt, IconBookmark, IconChart, IconDoc, IconFlame, IconGrid, IconHeart, IconHistory, IconList, IconMessage, IconPlug,
+  IconApps, IconBolt, IconBookmark, IconChart, IconCheck, IconClock, IconDoc, IconFlame, IconGrid, IconHeart, IconHistory, IconList, IconMessage, IconPlug,
 } from "../icons";
+import type { StageKey } from "@aihot/contracts/taxonomy";
 
 export interface NavItem {
   to: string;
@@ -15,6 +16,12 @@ export interface NavItem {
   /** Shows the unread dot while the changelog has news. */
   changelog?: boolean;
 }
+
+export const HOME_STAGE_NAV: Array<{ key: StageKey; label: string; icon: NavItem["icon"] }> = [
+  { key: "tender", label: "招标采购", icon: IconList },
+  { key: "preBid", label: "标前信息", icon: IconClock },
+  { key: "award", label: "中标信息", icon: IconCheck },
+];
 
 export const SIDEBAR: Array<{ title: string; items: NavItem[] }> = [
   {

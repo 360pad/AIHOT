@@ -27,6 +27,7 @@ function filterQuery(f: TimelineFilters, extra: Record<string, string | number |
   const sp = new URLSearchParams();
   if (f.channel !== "all") sp.set("channel", f.channel);
   if (f.category) sp.set("category", f.category);
+  if (f.stage) sp.set("stage", f.stage);
   if (f.tag) sp.set("tag", f.tag);
   if (f.topic) sp.set("topic", f.topic);
   for (const [k, v] of Object.entries(extra)) if (v !== null && v !== undefined && v !== "") sp.set(k, String(v));

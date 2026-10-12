@@ -1,7 +1,7 @@
 // Feed filters: the channel and category row, and search.
 import { useEffect, useRef, useState } from "react";
 import { Form, Link, useNavigation, useSearchParams } from "react-router";
-import { CATEGORY_KEYS, CATEGORY_LABELS, CHANNEL_LABELS, type CategoryKey, type ChannelKey } from "@aihot/contracts/taxonomy";
+import { CATEGORY_KEYS, CATEGORY_LABELS, CHANNEL_LABELS, STAGE_KEYS, STAGE_LABELS, type CategoryKey, type ChannelKey, type StageKey } from "@aihot/contracts/taxonomy";
 import { IconClose, IconSearch } from "../../components/icons";
 import { PillTabs } from "../../components/ui/Tabs";
 
@@ -32,6 +32,64 @@ export function CategoryTabs({ base, category, channel = "all", layoutId, size =
   ];
   const active = channel === "firstParty" ? "firstParty" : (category ?? "all");
   return <PillTabs items={items} active={active} layoutId={layoutId} label="筛选" size={size} className={className} />;
+}
+
+const INDUSTRY_LABELS = [
+  { key: "all", label: "全部行业" },
+  ...CATEGORY_KEYS.map((key) => ({ key, label: CATEGORY_LABELS[key] })),
+] as const;
+
+/** Homepage's primary business-stage navigation. */
+export function StageNav({ stage, className = "", orientation = "horizontal" }: { stage: StageKey; className?: string; orientation?: "horizontal" | "vertical" }) {
+  const [params] = useSearchParams();
+  return (
+    <nav aria-label="业务阶段" className={orientation === "vertical" ? `flex flex-col gap-1 ${className}` : `flex gap-1 overflow-x-auto ${className}`}>
+      {STAGE_KEYS.map((key) => {
+        const active = stage === key;
+        const to = hrefWith("/", params, { stage: key });
+        return (
+          <Link
+            key={key}
+            to={to}
+            prefetch="intent"
+            aria-current={active ? "page" : undefined}
+            className={`shrink-0 rounded-control text-[14px] font-medium transition-colors ${
+              orientation === "vertical" ? "px-3 py-2.5" : "px-3.5 py-2"
+            } ${active ? "bg-accent/10 font-semibold text-ink dark:bg-accent-soft" : "text-ink-3 hover:bg-bg-sunk hover:text-ink"}`}
+          >
+            {STAGE_LABELS[key]}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+/** Homepage's secondary industry navigation, kept independent from the stage filter. */
+export function IndustryNav({ category, className = "", mobile = false }: { category: CategoryKey | null; className?: string; mobile?: boolean }) {
+  const [params] = useSearchParams();
+  return (
+    <aside className={`${mobile ? "lg:hidden" : "hidden lg:block"} ${className}`} aria-label="行业分类">
+      {!mobile && <div className="mb-3 px-2 text-[12px] font-semibold text-ink-3">行业</div>}
+      <nav className={mobile ? "-mx-4 flex gap-1 overflow-x-auto border-y border-line-soft bg-bg-muted/30 px-4 py-2" : "flex flex-col gap-1"}>
+        {INDUSTRY_LABELS.map(({ key, label }) => {
+          const active = key === "all" ? category === null : category === key;
+          const to = hrefWith("/", params, { category: key === "all" ? null : key });
+          return (
+            <Link
+              key={key}
+              to={to}
+              prefetch="intent"
+              aria-current={active ? "page" : undefined}
+              className={`rounded-control px-3 ${mobile ? "whitespace-nowrap py-1.5 text-[13px]" : "py-2.5 text-[14px]"} leading-5 transition-colors ${active ? "bg-accent/10 font-semibold text-ink dark:bg-accent-soft" : "text-ink-3 hover:bg-bg-sunk hover:text-ink"}`}
+            >
+              {label}
+            </Link>
+          );
+        })}
+      </nav>
+    </aside>
+  );
 }
 
 function useSlashFocus(ref: React.RefObject<HTMLInputElement | null>) {

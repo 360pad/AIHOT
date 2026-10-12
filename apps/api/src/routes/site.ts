@@ -2,7 +2,7 @@
 // Reads through the same public read layer as v1; no cookies are read or set.
 import { FEATURES } from "@aihot/industry/features";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { isCategoryKey, isChannelKey, type CategoryKey, type ChannelKey } from "@aihot/contracts/taxonomy";
+import { isCategoryKey, isChannelKey, isStageKey, type CategoryKey, type ChannelKey, type StageKey } from "@aihot/contracts/taxonomy";
 import { InvalidCursorError } from "@aihot/backend/lib/cursor";
 import { exportMarkdown, loadItemDetail, siteItemDetail } from "@aihot/backend/publication/detail";
 import { loadPool, SearchBusyError } from "@aihot/backend/publication/pool";
@@ -59,6 +59,7 @@ export function siteHandler(fn: Handler): Handler {
 export interface FilterParams {
   channel: ChannelKey;
   category: CategoryKey | null;
+  stage: StageKey | null;
   tag: string | null;
   topic: string | null;
   topicTags: string[] | null;
@@ -69,6 +70,8 @@ export async function parseFilters(q: Record<string, string>): Promise<FilterPar
   if (!isChannelKey(channel)) throw new BadRequest("invalid channel");
   const category = q.category ?? null;
   if (category !== null && !isCategoryKey(category)) throw new BadRequest("invalid category");
+  const stage = q.stage ?? null;
+  if (stage !== null && !isStageKey(stage)) throw new BadRequest("invalid stage");
   const tag = q.tag?.trim() ? q.tag.trim().slice(0, 60) : null;
   const topic = q.topic?.trim() || null;
   let topicTags: string[] | null = null;
@@ -76,7 +79,7 @@ export async function parseFilters(q: Record<string, string>): Promise<FilterPar
     topicTags = await loadTopicTags(topic);
     if (!topicTags) throw new BadRequest("unknown topic");
   }
-  return { channel, category: category as CategoryKey | null, tag, topic, topicTags };
+  return { channel, category: category as CategoryKey | null, stage, tag, topic, topicTags };
 }
 
 export function registerSite(app: FastifyInstance) {
@@ -90,7 +93,7 @@ export function registerSite(app: FastifyInstance) {
     const q = looseQuery(req);
     const filters = await parseFilters(q);
     const limit = Math.min(Math.max(Number(q.limit) || 20, 1), 40);
-    const unfiltered = filters.channel === "all" && !filters.category && !filters.tag && !filters.topic && !q.cursor;
+    const unfiltered = filters.channel === "all" && !filters.category && !filters.stage && !filters.tag && !filters.topic && !q.cursor;
     const [data, hot] = await Promise.all([
       loadTimeline({ ...filters, cursor: q.cursor || null, limit }),
       unfiltered ? loadHotStrip() : null,
