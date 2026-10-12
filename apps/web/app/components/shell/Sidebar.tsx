@@ -5,7 +5,7 @@ import { Wordmark } from "../Logo";
 import { useChangelogSeen } from "../../lib/local-state";
 import { HOME_STAGE_NAV, SIDEBAR, tabIsActive, type NavItem } from "./nav";
 import { ThemeSwitch } from "./ThemeSwitch";
-import { IconApps, IconBookmark, IconDoc } from "../icons";
+import { IconApps, IconBookmark, IconChevronRight, IconDoc } from "../icons";
 
 /** True while the changelog has an entry newer than the one this reader last opened. */
 export function useChangelogDot(latestVersion: string | null): boolean {
@@ -67,16 +67,20 @@ export function Sidebar({ changelogVersion }: { changelogVersion: string | null 
   const { pathname } = useLocation();
   const home = pathname === "/";
   return (
-    <aside className="sticky top-0 hidden h-dvh w-[180px] shrink-0 flex-col border-r border-line bg-sidebar px-3 pb-3.5 pt-6 lg:flex">
-      <Link to="/" className="mb-4 flex h-[50px] items-center px-1 text-ink" aria-label={`${SITE.name} 首页`}>
-        <Wordmark size={24} />
+    <aside className="radar-sidebar sticky top-0 hidden h-dvh w-[216px] shrink-0 flex-col border-r border-line bg-sidebar px-3.5 pb-3.5 pt-5 lg:flex">
+      <Link to="/" className="radar-brand mb-5 flex min-h-[61px] items-start px-1 text-ink" aria-label={`${SITE.name} 首页`}>
+        <span>
+          <Wordmark size={23} />
+          {home && <span className="radar-brand-subtitle">招投标商机</span>}
+        </span>
       </Link>
       <nav className="-mx-1 flex-1 overflow-y-auto px-1" aria-label="主导航">
         {home ? (
           <div>
-            <div className="px-2.5 pb-1 pt-3.5 text-[11px] text-ink-4">内容</div>
+            <div className="px-2.5 pb-1 pt-2 text-[11px] text-ink-4">项目信息</div>
             <div className="flex flex-col gap-1">
               {HOME_STAGE_NAV.map((item) => <HomeStageLink key={item.key} item={item} />)}
+              <div className="radar-sidebar-divider" />
               <SideLink item={{ to: "/daily", label: "商机日报", icon: IconDoc }} dot={false} />
               <SideLink item={{ to: "/starred", label: "收藏", icon: IconBookmark }} dot={false} />
             </div>
@@ -92,10 +96,11 @@ export function Sidebar({ changelogVersion }: { changelogVersion: string | null 
       </nav>
       <div className="mt-2 space-y-2.5 px-1 pt-1">
         {home && (
-          <Link to="/admin" className="block rounded-control px-2.5 py-2 text-[14px] font-medium text-ink-3 transition-colors hover:bg-bg-sunk hover:text-ink">
+          <Link to="/admin" className="radar-admin-link block rounded-control px-2.5 py-2 text-[14px] font-medium text-ink-3 transition-colors hover:bg-bg-sunk hover:text-ink">
             <span className="flex items-center gap-2.5">
               <span className="flex w-[22px] justify-center text-ink-3"><IconApps size={17} /></span>
               <span>后台管理</span>
+              <IconChevronRight size={15} className="ml-auto" />
             </span>
             <span className="mt-1 block pl-[32px] text-[10.5px] text-ink-4">Agent 接入 · 更新日志</span>
           </Link>

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Form, Link, useNavigation, useSearchParams } from "react-router";
 import { CATEGORY_KEYS, CATEGORY_LABELS, CHANNEL_LABELS, STAGE_KEYS, STAGE_LABELS, type CategoryKey, type ChannelKey, type StageKey } from "@aihot/contracts/taxonomy";
-import { IconClose, IconSearch } from "../../components/icons";
+import { IconApps, IconBolt, IconClose, IconFlame, IconGrid, IconList, IconMenu, IconSearch } from "../../components/icons";
 import { PillTabs } from "../../components/ui/Tabs";
 
 /** Same page with some query parameters changed (paging state dropped). */
@@ -68,22 +68,30 @@ export function StageNav({ stage, className = "", orientation = "horizontal" }: 
 /** Homepage's secondary industry navigation, kept independent from the stage filter. */
 export function IndustryNav({ category, className = "", mobile = false }: { category: CategoryKey | null; className?: string; mobile?: boolean }) {
   const [params] = useSearchParams();
+  const iconFor = (key: string) => key === "all" ? IconGrid : key === "smart-water" ? IconBolt : key === "digital-government" ? IconGrid : key === "digital-mining" ? IconFlame : key === "digital-construction" ? IconApps : key === "geospatial" ? IconList : IconGrid;
   return (
-    <aside className={`${mobile ? "lg:hidden" : "hidden lg:block"} ${className}`} aria-label="行业分类">
-      {!mobile && <div className="mb-3 px-2 text-[12px] font-semibold text-ink-3">行业</div>}
-      <nav className={mobile ? "-mx-4 flex gap-1 overflow-x-auto border-y border-line-soft bg-bg-muted/30 px-4 py-2" : "flex flex-col gap-1"}>
+    <aside className={`radar-industry-nav ${mobile ? "lg:hidden" : "hidden lg:block"} ${className}`} aria-label="行业分类">
+      {!mobile && (
+        <div className="radar-industry-heading">
+          <span>行业分类</span>
+          <button type="button" aria-label="收起行业分类" className="radar-collapse-button"><IconMenu size={17} /></button>
+        </div>
+      )}
+      <nav className={mobile ? "-mx-4 flex gap-1 overflow-x-auto border-y border-line-soft bg-bg-muted/30 px-4 py-2" : "radar-industry-list"}>
         {INDUSTRY_LABELS.map(({ key, label }) => {
           const active = key === "all" ? category === null : category === key;
           const to = hrefWith("/", params, { category: key === "all" ? null : key });
+          const Icon = iconFor(key);
           return (
             <Link
               key={key}
               to={to}
               prefetch="intent"
               aria-current={active ? "page" : undefined}
-              className={`rounded-control px-3 ${mobile ? "whitespace-nowrap py-1.5 text-[13px]" : "py-2.5 text-[14px]"} leading-5 transition-colors ${active ? "bg-accent/10 font-semibold text-ink dark:bg-accent-soft" : "text-ink-3 hover:bg-bg-sunk hover:text-ink"}`}
+              className={`radar-industry-item rounded-control px-3 ${mobile ? "whitespace-nowrap py-1.5 text-[13px]" : "py-2.5 text-[14px]"} leading-5 transition-colors ${active ? "is-active bg-accent/10 font-semibold text-ink dark:bg-accent-soft" : "text-ink-3 hover:bg-bg-sunk hover:text-ink"}`}
             >
-              {label}
+              <Icon size={mobile ? 16 : 20} />
+              <span>{label}</span>
             </Link>
           );
         })}
@@ -109,7 +117,7 @@ function useSlashFocus(ref: React.RefObject<HTMLInputElement | null>) {
  * Search field (GET /all?q=…). Desktop ("track"): at the end of the filter row as the same grey track,
  * at the height of md tabs, with a "/" hint. Phones ("bar"): full width with a separate 搜索 button.
  */
-export function SearchField({ action = "/all", defaultValue = "", keep = {}, variant = "track", autoFocus = false }: { action?: string; defaultValue?: string; keep?: Record<string, string | null>; variant?: "track" | "bar"; autoFocus?: boolean }) {
+export function SearchField({ action = "/all", defaultValue = "", keep = {}, variant = "track", autoFocus = false, placeholder }: { action?: string; defaultValue?: string; keep?: Record<string, string | null>; variant?: "track" | "bar"; autoFocus?: boolean; placeholder?: string }) {
   const [value, setValue] = useState(defaultValue);
   const navigation = useNavigation();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -133,7 +141,7 @@ export function SearchField({ action = "/all", defaultValue = "", keep = {}, var
             name="q"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            placeholder="搜索标题、摘要…"
+            placeholder={placeholder ?? "搜索标题、摘要…"}
             maxLength={200}
             autoComplete="off"
             enterKeyHint="search"
@@ -165,7 +173,7 @@ export function SearchField({ action = "/all", defaultValue = "", keep = {}, var
         name="q"
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder="搜索标题、摘要…"
+        placeholder={placeholder ?? "搜索标题、摘要…"}
         maxLength={200}
         autoComplete="off"
         className="h-[42px] w-full rounded-full bg-bg-sunk pl-10 pr-10 text-[14px] text-ink outline-none ring-1 ring-inset ring-line-soft transition-[background-color,box-shadow] placeholder:text-ink-4 hover:ring-line-strong focus:bg-surface focus:shadow-[0_0_0_3px_var(--accent-soft)] focus:ring-accent dark:bg-bg-muted/60 dark:focus:bg-surface"

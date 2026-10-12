@@ -69,8 +69,10 @@ export function meta({ error }: Route.MetaArgs) {
 /** Sidebar, main column and phone tab bar around a page (or an error). */
 function SiteShell({ changelogVersion, children }: { changelogVersion: string | null; children: ReactNode }) {
   const navigation = useNavigation();
+  const { pathname } = useLocation();
+  const home = pathname === "/";
   return (
-    <div className="flex min-h-dvh">
+    <div className={`flex min-h-dvh ${home ? "radar-shell" : ""}`}>
       <NavigationProgress active={navigation.state === "loading"} />
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[70] focus:rounded-control focus:bg-surface focus:px-3 focus:py-2">
         跳到正文
@@ -78,7 +80,7 @@ function SiteShell({ changelogVersion, children }: { changelogVersion: string | 
       <Sidebar changelogVersion={changelogVersion} />
       {/* Mobile shell (≤ 960px): one centred column, the tab bar below. Desktop: the page fills the main area
           up to the list width (--page-max-wide), centred beyond it. */}
-      <main id="main" className="min-w-0 flex-1 pb-[calc(72px+env(safe-area-inset-bottom))] lg:px-7 lg:pb-[72px] lg:pt-6">
+      <main id="main" className="min-w-0 flex-1 pb-[calc(72px+env(safe-area-inset-bottom))] lg:px-7 lg:pb-[72px] lg:pt-6 radar-main">
         <div className="mx-auto w-full max-w-[640px] px-4 lg:max-w-[var(--page-max-wide)] lg:px-0">{children}</div>
       </main>
       <MobileTabBar changelogVersion={changelogVersion} />

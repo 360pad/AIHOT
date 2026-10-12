@@ -9,6 +9,7 @@ import { Wordmark } from "../components/Logo";
 import { Timeline } from "../features/feed/Timeline";
 import { HotTopics } from "../features/feed/HotTopics";
 import { IndustryNav, SearchField, SearchIconLink, StageNav } from "../features/feed/Filters";
+import { IconChevronDown } from "../components/icons";
 import { beijingDate, beijingWeekday } from "../lib/format";
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -54,7 +55,7 @@ export default function Home() {
   const title = filters.tag ? `#${filters.tag}` : STAGE_LABELS[stage];
   const industry = filters.category ? CATEGORY_LABELS[filters.category] : "全部行业";
   return (
-    <div className="pb-6">
+    <div className="radar-home-page pb-6">
       {/* Phones: brand bar, today's hot topics, then the feed under "最新精选". */}
       <div className="flex h-14 items-center justify-between lg:hidden">
         <Wordmark size={20} className="text-ink" />
@@ -68,21 +69,31 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="lg:grid lg:grid-cols-[190px_minmax(0,1fr)] lg:gap-7">
+      <div className="lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
         <IndustryNav category={filters.category} />
-        <section className="min-w-0">
+        <section className="radar-home-main min-w-0">
           <div className="hidden lg:block">
-            <p className="text-[12px] font-medium text-ink-4">{STAGE_LABELS[stage]}</p>
-            <h1 className="mt-1 text-[24px] font-semibold leading-[1.3] text-ink">{title} · {industry}</h1>
-            <div className="mb-5 mt-4 flex items-center justify-end gap-4">
-              <SearchField variant="track" keep={{ category: filters.category, stage }} />
+            <div className="radar-home-heading">
+              <div>
+                <h1 className="radar-home-title">{title} · {industry}</h1>
+                <p className="radar-home-subtitle">发现与业务相关的在招项目</p>
+              </div>
+              <div className="radar-refresh-copy">
+                <span>每日 08:00、17:00 更新</span>
+                <span>最近更新：10月12日 17:00</span>
+              </div>
+            </div>
+            <div className="radar-toolbar">
+              <SearchField variant="track" keep={{ category: filters.category, stage }} placeholder="搜索项目名称、采购单位或关键词" />
+              <button type="button" className="radar-filter-button">采购方式 <IconChevronDown size={15} /></button>
+              <button type="button" className="radar-filter-button">发布日期 <IconChevronDown size={15} /></button>
             </div>
           </div>
 
           {data.hot && <HotTopics entries={data.hot} />}
 
           <h2 className="mt-6 text-[20px] font-bold text-ink lg:hidden">{filters.tag ? title : `${STAGE_LABELS[stage]} · ${industry}`}</h2>
-          <Timeline initial={data} filters={data.filters} />
+          <Timeline initial={data} filters={data.filters} variant="radar" />
         </section>
       </div>
     </div>

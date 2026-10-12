@@ -391,6 +391,108 @@
   }
 }
 
+/* Homepage visual language from the accepted Tender Radar mockup. The rest of the site keeps the
+   editorial paper theme; the radar shell uses the cool blue workspace palette only on /. */
+.radar-shell {
+  --bg: #f7fbfe;
+  --bg-sunk: #eef5fd;
+  --bg-muted: #e6f0fb;
+  --surface: #ffffff;
+  --surface-2: #fbfdff;
+  --raised: #ffffff;
+  --sidebar: #f8fbfe;
+  --daybar: #f2f7fd;
+  --field: #f4f8fd;
+  --ink: #10254a;
+  --ink-2: #263f68;
+  --ink-3: #58719a;
+  --ink-4: #7085a5;
+  --line: #dce8f6;
+  --line-strong: #c9dbf1;
+  --line-soft: #e8f0f8;
+  --accent: #1565e8;
+  --accent-ink: #1558c9;
+  --accent-soft: rgba(21, 101, 232, 0.09);
+  --accent-softer: rgba(21, 101, 232, 0.05);
+  --accent-contrast: #ffffff;
+  --note: #5b759d;
+  --amber: #a67827;
+  --amber-ink: #87611d;
+  --amber-soft: rgba(190, 145, 54, 0.13);
+  background: var(--bg);
+}
+
+.radar-shell .radar-main { padding: 0; }
+.radar-sidebar { border-color: var(--line); background: var(--sidebar); }
+.radar-brand { color: var(--ink); }
+.radar-brand-subtitle { display: block; margin: 4px 0 0 13px; color: var(--ink-3); font-size: 13px; line-height: 1.2; }
+.radar-sidebar nav a { height: 48px; gap: 13px; padding-inline: 14px; border-radius: 9px; color: var(--ink-2); font-size: 16px; }
+.radar-sidebar nav a:hover { background: var(--accent-softer); color: var(--ink); }
+.radar-sidebar nav a[aria-current="page"] { background: #e7f1ff; color: var(--accent); font-weight: 700; }
+.radar-sidebar nav a > span:first-child { width: 22px; color: currentColor; }
+.radar-sidebar-divider { height: 1px; margin: 14px 8px 13px; background: var(--line); }
+.radar-admin-link { color: var(--accent-ink); }
+.radar-admin-link > span:first-child { color: var(--accent); }
+.radar-admin-link > span:last-child { color: var(--ink-3); }
+
+.radar-industry-nav { min-height: 100%; border-right: 1px solid var(--line); background: rgba(249, 252, 255, 0.88); padding: 24px 13px 32px; }
+.radar-industry-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 10px 17px; color: var(--ink); font-size: 21px; font-weight: 700; }
+.radar-collapse-button { display: grid; width: 30px; height: 30px; place-items: center; border: 0; border-radius: 7px; background: transparent; color: var(--accent-ink); }
+.radar-collapse-button:hover { background: var(--accent-softer); }
+.radar-industry-list { display: flex; flex-direction: column; gap: 5px; }
+.radar-industry-item { display: flex; min-height: 48px; align-items: center; gap: 14px; padding: 0 13px; border-radius: 9px; color: var(--ink-2); font-size: 16px; }
+.radar-industry-item svg { flex: none; color: currentColor; }
+.radar-industry-item.is-active { background: #e7f1ff; color: var(--accent); font-weight: 700; }
+.radar-industry-item:hover { background: var(--accent-softer); color: var(--ink); }
+
+.radar-home-main { min-width: 0; padding: 26px 25px 0 28px; }
+.radar-home-heading { display: flex; min-height: 74px; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.radar-home-title { margin: 0; color: var(--ink); font-size: 32px; font-weight: 750; letter-spacing: -0.025em; line-height: 1.2; }
+.radar-home-subtitle { margin: 8px 0 0; color: var(--ink-3); font-size: 16px; line-height: 1.35; }
+.radar-refresh-copy { display: flex; gap: 28px; padding-top: 13px; color: var(--ink-3); font-size: 13px; white-space: nowrap; }
+.radar-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) 126px 126px; gap: 14px; margin: 16px 0 32px; }
+.radar-toolbar form { width: 100%; }
+.radar-toolbar form input { height: 46px; border: 1px solid #b6d2fa; border-radius: 8px; background: #fff; box-shadow: none; color: var(--ink); font-size: 15px; }
+.radar-toolbar form input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(21, 101, 232, 0.1); }
+.radar-filter-button { display: inline-flex; height: 46px; align-items: center; justify-content: space-between; gap: 10px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; color: var(--ink-2); font-size: 14px; }
+.radar-filter-button:hover { border-color: #9cbbeb; background: var(--accent-softer); }
+.radar-day-header { position: static; margin: 0; padding: 0; background: transparent; }
+.radar-day-header .radar-day-header-desktop { height: 42px; grid-template-columns: auto 24px auto; justify-content: start; gap: 6px; }
+.radar-day-header .radar-day-header-desktop button:first-child { font-size: 21px; font-weight: 750; }
+.radar-day-header .radar-day-header-desktop span:last-child { color: var(--ink-3); font-size: 14px; }
+.radar-timeline-slot { grid-template-columns: 64px 44px minmax(0, 1fr); padding-bottom: 0; }
+.radar-timeline-slot > time { padding-top: 18px; color: var(--ink-3); font-size: 16px; font-weight: 650; }
+.radar-timeline-slot > span > span:first-child { left: 21.5px; top: 27px; bottom: -1px; background: #c7d8ec; }
+.radar-timeline-slot > span > span:last-child { left: 18.5px; top: 25px; background: var(--accent); box-shadow: 0 0 0 4px var(--bg); }
+.radar-feed-card { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) 148px 148px; min-height: 136px; border-bottom: 1px solid var(--line); padding: 16px 0 17px; }
+.radar-item-main { min-width: 0; padding-right: 22px; }
+.radar-item-title-row { display: flex; align-items: center; gap: 13px; min-width: 0; }
+.radar-item-title { min-width: 0; margin: 0; color: var(--ink); font-size: 19px; font-weight: 750; line-height: 1.35; }
+.radar-item-title a { display: inline; }
+.radar-item-title a:hover { color: var(--accent); }
+.radar-item-title.is-read { color: var(--ink-3); }
+.radar-item-title-row .rounded-full { height: 24px; padding-inline: 10px; background: #eaf3ff; color: var(--accent-ink); box-shadow: none; }
+.radar-item-title-row .rounded-full .h-2\.5 { display: none; }
+.radar-item-title-row .rounded-full span { font-size: 12px; }
+.radar-item-meta { display: flex; align-items: center; gap: 9px; margin-top: 12px; color: var(--ink-3); font-size: 13px; white-space: nowrap; }
+.radar-item-meta span { display: inline-flex; min-width: 0; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; }
+.radar-item-meta i { width: 1px; height: 16px; background: var(--line-strong); }
+.radar-item-summary { display: -webkit-box; margin: 11px 0 0; overflow: hidden; color: var(--ink-3); font-size: 13px; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.radar-item-metric { display: flex; flex-direction: column; justify-content: center; gap: 9px; border-left: 1px solid #cfe0f5; padding-left: 21px; }
+.radar-item-metric span { color: var(--ink-3); font-size: 13px; }
+.radar-item-metric strong { color: var(--accent); font-size: 20px; font-weight: 750; line-height: 1.15; }
+.radar-item-metric:last-child strong { color: var(--ink); font-size: 16px; }
+
+@media (max-width: 960px) {
+  .radar-home-main { padding: 0; }
+  .radar-industry-nav { min-height: auto; border-right: 0; padding: 0; }
+  .radar-home-heading { min-height: 0; }
+  .radar-refresh-copy { display: none; }
+  .radar-toolbar { grid-template-columns: 1fr; margin-bottom: 20px; }
+  .radar-feed-card { grid-template-columns: 1fr; min-height: 0; gap: 10px; }
+  .radar-item-metric { display: none; }
+}
+
 /* ---------------------------------------------------------------------------
    Long-form reading (article bodies, reports, legal pages)
    --------------------------------------------------------------------------- */

@@ -2,11 +2,12 @@
 // loader. A site with its own logo can replace Wordmark here.
 import { SITE } from "@aihot/industry/site";
 
-export function Wordmark({ size = 22, className = "" }: { size?: number; className?: string }) {
+export function Wordmark({ size = 22, className = "", stacked = false }: { size?: number; className?: string; stacked?: boolean }) {
+  const [first, ...rest] = SITE.name.split(" ");
   return (
-    <span className={`inline-flex items-center font-black leading-none tracking-[-0.03em] ${className}`} style={{ fontSize: size }} aria-label={SITE.name} role="img">
-      <span aria-hidden="true" className="mr-[0.3em] inline-block size-[0.42em] rounded-full bg-accent" />
-      <span aria-hidden="true">{SITE.name}</span>
+    <span className={`inline-flex ${stacked ? "items-start" : "items-center"} font-black leading-none tracking-[-0.03em] ${className}`} style={{ fontSize: size }} aria-label={SITE.name} role="img">
+      <span aria-hidden="true" className={`${stacked ? "mt-[0.58em] mr-[0.3em]" : "mr-[0.3em]"} inline-block size-[0.42em] shrink-0 rounded-full bg-accent`} />
+      <span aria-hidden="true">{stacked ? <>{first}<br />{rest.join(" ")}</> : SITE.name}</span>
     </span>
   );
 }

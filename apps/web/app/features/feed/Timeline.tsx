@@ -41,13 +41,13 @@ function fromResponse(r: TimelineResponse): ListState {
 const WEEKDAY_SHORT = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
 /** Sticky day header: a quiet row on desktop, a grey full-width bar on phones. */
-export function DayHeader({ day, today, count, collapsed, onToggle }: { day: string; today: string; count: number | null; collapsed?: boolean; onToggle?: () => void }) {
+export function DayHeader({ day, today, count, collapsed, onToggle, variant = "default" }: { day: string; today: string; count: number | null; collapsed?: boolean; onToggle?: () => void; variant?: "default" | "radar" }) {
   const [, m, d] = day.split("-").map(Number) as [number, number, number];
   const date = `${m}月${d}日`;
   const weekday = beijingWeekday(day);
   const short = WEEKDAY_SHORT[new Date(`${day}T12:00:00+08:00`).getUTCDay()] ?? "";
   return (
-    <div className="sticky top-0 z-20 -mx-4 bg-daybar px-4 lg:mx-0 lg:bg-bg lg:px-0">
+    <div className={`sticky top-0 z-20 -mx-4 bg-daybar px-4 lg:mx-0 lg:bg-bg lg:px-0 ${variant === "radar" ? "radar-day-header" : ""}`}>
       {/* Phones: a full-width day bar. */}
       <div className="flex h-9 items-center gap-2 lg:hidden">
         <span className="text-[14px] font-bold text-ink">{day === today ? "今天" : date}</span>
@@ -55,7 +55,7 @@ export function DayHeader({ day, today, count, collapsed, onToggle }: { day: str
         <span className="text-[12.5px] text-ink-4">{short}</span>
       </div>
       {/* Desktop: the date ends where the times end, the fold toggle sits on the rail. */}
-      <div className="hidden h-11 grid-cols-[64px_22px_minmax(0,1fr)] items-center lg:grid">
+      <div className="radar-day-header-desktop hidden h-11 grid-cols-[64px_22px_minmax(0,1fr)] items-center lg:grid">
         <button type="button" onClick={onToggle} disabled={!onToggle} className="justify-self-end whitespace-nowrap text-right text-[18px] font-semibold leading-6 text-ink">
           {date}
         </button>
@@ -73,10 +73,10 @@ export function DayHeader({ day, today, count, collapsed, onToggle }: { day: str
           <span />
         )}
         <span className="text-[13px] text-ink-4">
-          {weekday}
+          {variant === "radar" ? (day === today ? " · 今天" : "") : weekday}
           {count !== null && (
             <>
-              {" · "}
+              {variant === "radar" ? "  共 " : " · "}
               <span className="num">{count}</span> 条
             </>
           )}
@@ -90,11 +90,11 @@ export function DayHeader({ day, today, count, collapsed, onToggle }: { day: str
  * One dated slot: the time, the rail (desktop) and the item. As on the original timeline, the rail is a
  * 1px line from this node's centre to the next one's, so the day reads as one continuous thread.
  */
-export function TimelineSlot({ at, children, fresh = false, delay = 0, dataKey }: { at: string; children: React.ReactNode; fresh?: boolean; delay?: number; dataKey?: string }) {
+export function TimelineSlot({ at, children, fresh = false, delay = 0, dataKey, variant = "default" }: { at: string; children: React.ReactNode; fresh?: boolean; delay?: number; dataKey?: string; variant?: "default" | "radar" }) {
   return (
     <li
       data-card-key={dataKey}
-      className={`group/slot grid grid-cols-[48px_minmax(0,1fr)] border-b border-line-soft py-3.5 last:border-b-0 lg:grid-cols-[64px_22px_minmax(0,1fr)] lg:border-b-0 lg:py-0 lg:pb-3 lg:last:pb-0 ${fresh ? "animate-fade-up" : ""}`}
+      className={`group/slot grid grid-cols-[48px_minmax(0,1fr)] border-b border-line-soft py-3.5 last:border-b-0 lg:grid-cols-[64px_22px_minmax(0,1fr)] lg:border-b-0 lg:py-0 lg:pb-3 lg:last:pb-0 ${variant === "radar" ? "radar-timeline-slot" : ""} ${fresh ? "animate-fade-up" : ""}`}
       style={fresh ? { animationDelay: `${delay}ms` } : undefined}
     >
       <time dateTime={at} className="mono pt-[2px] text-[13px] leading-[18px] text-ink-4 lg:pt-[17px] lg:text-[12.5px] lg:font-semibold lg:leading-6 lg:text-ink-3">
@@ -109,7 +109,7 @@ export function TimelineSlot({ at, children, fresh = false, delay = 0, dataKey }
   );
 }
 
-export function Timeline({ initial, filters }: { initial: TimelineResponse; filters: TimelineFilters }) {
+export function Timeline({ initial, filters, variant = "default" }: { initial: TimelineResponse; filters: TimelineFilters; variant?: "default" | "radar" }) {
   const location = useLocation();
   const navigation = useNavigation();
   const readSet = useReadSet();
@@ -282,15 +282,15 @@ export function Timeline({ initial, filters }: { initial: TimelineResponse; filt
         const count = state.dayCounts[day] ?? cards.length;
         return (
           <section key={day} aria-label={day} className="lg:mb-1">
-            <DayHeader day={day} today={today} count={count} collapsed={collapsed} onToggle={() => toggleDay(day)} />
+            <DayHeader day={day} today={today} count={count} collapsed={collapsed} onToggle={() => toggleDay(day)} variant={variant} />
             <Collapse open={!collapsed}>
                 <ol className="lg:pt-1">
                   {cards.map((c) => {
                     const fresh = freshKeys.has(c.key);
                     const delay = fresh ? Math.min(order++, 10) * 40 : 0;
                     return (
-                      <TimelineSlot key={c.key} dataKey={c.key} at={c.anchorAt} fresh={fresh} delay={delay}>
-                        <FeedItem item={c.item} group={c.group} filters={filters} read={readSet.has(c.item.id)} onOpen={markRead} />
+                      <TimelineSlot key={c.key} dataKey={c.key} at={c.anchorAt} fresh={fresh} delay={delay} variant={variant}>
+                        <FeedItem item={c.item} group={c.group} filters={filters} read={readSet.has(c.item.id)} onOpen={markRead} variant={variant} />
                       </TimelineSlot>
                     );
                   })}

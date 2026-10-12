@@ -4,7 +4,8 @@ import { memo } from "react";
 import { Link } from "react-router";
 import { IntentLink } from "../../components/ui/IntentLink";
 import type { GroupInfo, FeedItemSummary, TimelineFilters } from "@aihot/contracts/site";
-import { CATEGORY_LABELS } from "@aihot/contracts/taxonomy";
+import { CATEGORY_LABELS, STAGE_LABELS } from "@aihot/contracts/taxonomy";
+import { IconChevronRight, IconDoc, IconGrid } from "../../components/icons";
 import { SelectedBadge } from "../../components/ui/Badge";
 import { ScoreLabel } from "../../components/ui/Score";
 import { MediaThumbs, SourceLine, StarButton } from "./parts";
@@ -19,14 +20,19 @@ export interface FeedItemProps {
   onOpen?: (id: string) => void;
   /** Show category and tags under the text (全部动态, topics, search). */
   showTags?: boolean;
+  variant?: "default" | "radar";
 }
 
-export const FeedItem = memo(function FeedItem({ item, group, filters, read = false, onOpen, showTags = false }: FeedItemProps) {
+export const FeedItem = memo(function FeedItem({ item, group, filters, read = false, onOpen, showTags = false, variant = "default" }: FeedItemProps) {
   const isX = item.channel === "x" && !!item.x;
   const open = () => onOpen?.(item.id);
   const showSources = !!group && (group.additionalSourceCount > 0 || (group.developmentCount <= 1 && group.reportCount > 1));
   const showDevelopments = !!group?.story && group.developmentCount > 1;
   const tags = showTags ? item.tags.slice(0, 3) : [];
+
+  if (variant === "radar") {
+    return <RadarFeedItem item={item} filters={filters} read={read} onOpen={onOpen} />;
+  }
 
   return (
     <article className="relative min-w-0 lg:card lg:card-hover lg:px-[18px] lg:pb-[14px] lg:pt-[15px]" data-item-id={item.id}>
@@ -101,3 +107,57 @@ export const FeedItem = memo(function FeedItem({ item, group, filters, read = fa
     </article>
   );
 });
+
+function budgetOf(item: FeedItemSummary) {
+  const text = `${item.title} ${item.summary ?? ""}`;
+  const match = text.match(/(?:预算(?:金额)?|最高投标限价|最高限价|投资)[：:]?\s*(?:人民币)?\s*([\d,.]+)\s*(万元|亿元|元)/);
+  if (!match) return "待核实";
+  const raw = Number((match[1] ?? "").replace(/,/g, ""));
+  if (!Number.isFinite(raw)) return "待核实";
+  if (match[2] === "元" && raw >= 100000) {
+    return `${raw / 10000 >= 1000 ? (raw / 10000).toLocaleString("zh-CN", { maximumFractionDigits: 2 }) : (raw / 10000).toFixed(2)}万元`;
+  }
+  const formatted = raw.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
+  return `${formatted}${match[2]}`;
+}
+
+function deadlineOf(item: FeedItemSummary) {
+  const text = `${item.title} ${item.summary ?? ""}`;
+  const match = text.match(/(?:截止|开标|响应文件提交)[^，。；;]{0,18}?((?:20\d{2}年)?\d{1,2}月\d{1,2}日(?:[\d:：点时分]{0,12})?)/);
+  return match?.[1]?.replace(/：/g, ":") ?? "待核实";
+}
+
+function RadarFeedItem({ item, filters, read, onOpen }: Pick<FeedItemProps, "item" | "filters" | "read" | "onOpen">) {
+  const open = () => onOpen?.(item.id);
+  const category = item.category ? CATEGORY_LABELS[item.category] : "综合商机";
+  const stage = filters?.stage === "tender" || !filters?.stage ? "公开招标" : STAGE_LABELS[filters.stage];
+  const scope = item.reason?.replace(/^推荐理由：?\s*/, "") || item.summary || "项目范围与采购要求待核实。";
+  return (
+    <article className="radar-feed-card" data-item-id={item.id}>
+      <div className="radar-item-main">
+        <div className="radar-item-title-row">
+          <h3 className={`radar-item-title ${read ? "is-read" : ""}`}>
+            <IntentLink to={`/items/${item.id}`} onClick={open}>{item.title}</IntentLink>
+          </h3>
+          <ScoreLabel score={item.score} />
+        </div>
+        <div className="radar-item-meta">
+          <span><IconDoc size={15} />{item.source.name}</span>
+          <i />
+          <span><IconGrid size={15} />{category}</span>
+          <i />
+          <span><IconChevronRight size={15} />{stage}</span>
+        </div>
+        <p className="radar-item-summary">项目范围：{scope}</p>
+      </div>
+      <div className="radar-item-metric">
+        <span>预算金额</span>
+        <strong>{budgetOf(item)}</strong>
+      </div>
+      <div className="radar-item-metric">
+        <span>截止时间</span>
+        <strong>{deadlineOf(item)}</strong>
+      </div>
+    </article>
+  );
+}
