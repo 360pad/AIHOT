@@ -11,6 +11,7 @@ import {
   IconClock,
   IconDoc,
   IconGrid,
+  IconHeart,
   IconHistory,
   IconInfo,
   IconMessage,
@@ -63,6 +64,14 @@ const NAV: Array<{ group: string; items: Array<{ to: string; label: string; coun
       { to: "/admin/selectbench", label: "SelectBench", icon: IconApps },
       { to: "/admin/settings", label: "设置", icon: IconInfo },
       { to: "/admin/audit", label: "审计记录", icon: IconHistory },
+    ],
+  },
+  {
+    group: "更多",
+    items: [
+      { to: "/agent", label: "Agent 接入", icon: IconPlug },
+      { to: "/about", label: "关于", icon: IconHeart },
+      { to: "/changelog", label: "更新日志", icon: IconHistory },
     ],
   },
 ];
