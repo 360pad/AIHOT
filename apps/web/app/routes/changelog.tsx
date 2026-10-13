@@ -1,6 +1,7 @@
 import { SITE, withSubject } from "@aihot/industry/site";
 import { Fragment, useEffect, useState } from "react";
-import { Link, useLoaderData } from "react-router";
+import { Link, useLoaderData, useLocation } from "react-router";
+import type { Route } from "./+types/changelog";
 import { apiGet } from "../lib/api.server";
 import { pageMeta } from "../lib/seo";
 import { setChangelogSeen } from "../lib/local-state";
@@ -25,8 +26,9 @@ export async function loader({ request }: { request: Request }) {
   return apiGet<{ latestVersion: string; releases: Release[] }>("/api/site/changelog", { signal: request.signal });
 }
 
-export function meta() {
-  return pageMeta({ title: "更新日志", description: `${SITE.name} 的功能更新、优化、公告与下线记录。`, path: "/changelog", image: "/og/pages/changelog.png" });
+export function meta({ location }: Route.MetaArgs) {
+  const title = location.pathname.startsWith("/admin/") ? `更新日志 · ${SITE.name} 后台` : "更新日志";
+  return pageMeta({ title, rawTitle: location.pathname.startsWith("/admin/"), description: `${SITE.name} 的功能更新、优化、公告与下线记录。`, path: location.pathname, image: "/og/pages/changelog.png" });
 }
 
 const KIND_DOT: Record<Release["kind"], string> = {
@@ -69,6 +71,8 @@ function ReleaseBody({ lines }: { lines: string[] }) {
 
 export default function ChangelogPage() {
   const data = useLoaderData<typeof loader>();
+  const { pathname } = useLocation();
+  const feedbackPath = pathname.startsWith("/admin/") ? "/admin/feedback" : "/feedback";
   useEffect(() => setChangelogSeen(data.latestVersion), [data.latestVersion]);
   const [kind, setKind] = useState<Release["kind"] | null>(null);
   const groups = new Map<string, Release[]>();
@@ -114,7 +118,7 @@ export default function ChangelogPage() {
       </AsideCard>
       <AsideCard title="有想法或遇到问题">
         <p className="text-[13px] leading-[1.75] text-ink-3">想要的功能、用着不顺的地方，都可以在反馈页告诉我们。</p>
-        <Link to="/feedback" prefetch="intent" className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-accent hover:underline">
+        <Link to={feedbackPath} prefetch="intent" className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-accent hover:underline">
           去反馈 <IconChevronRight size={14} />
         </Link>
       </AsideCard>

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, useLoaderData, useNavigate, useSearchParams } from "react-router";
+import { Link, useLoaderData, useLocation, useNavigate, useSearchParams } from "react-router";
 import type { Route } from "./+types/agent";
 import { SITE, withSubject } from "@aihot/industry/site";
 import { FEATURES } from "@aihot/industry/features";
@@ -32,7 +32,9 @@ const TABS = [
 type TabKey = (typeof TABS)[number]["key"];
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const tab = new URL(request.url).searchParams.get("tab");
+  const requestUrl = new URL(request.url);
+  const tab = requestUrl.searchParams.get("tab");
+  const basePath = requestUrl.pathname.startsWith("/admin/") ? "/admin/agent" : "/agent";
   let healthy = true;
   try {
     const res = await fetch(`${process.env.API_BASE_URL || "http://127.0.0.1:3001"}/api/health`, { signal: AbortSignal.any([request.signal, AbortSignal.timeout(3000)]) });
@@ -41,13 +43,15 @@ export async function loader({ request }: Route.LoaderArgs) {
     healthy = false;
   }
   // The public address the examples show is the configured one, the same on the server and in the browser.
-  return { tab: (TABS.some((t) => t.key === tab) ? tab : "mcp") as TabKey, healthy, base: siteUrl() };
+  return { tab: (TABS.some((t) => t.key === tab) ? tab : "mcp") as TabKey, healthy, base: siteUrl(), basePath };
 }
 
-export function meta({ loaderData }: Route.MetaArgs) {
+export function meta({ loaderData, location }: Route.MetaArgs) {
   // Only the tab is part of the address (mcp is the default and not written).
-  const path = listPath("/agent", { tab: loaderData && loaderData.tab !== "mcp" ? loaderData.tab : null });
-  return pageMeta({ title: "Agent 接入", description: `让 Agent 直接使用 ${SITE.name}：MCP、RSS、REST API v1，匿名只读。`, path, image: "/og/pages/agent.png" });
+  const path = listPath(loaderData?.basePath ?? "/agent", { tab: loaderData && loaderData.tab !== "mcp" ? loaderData.tab : null });
+  const admin = location.pathname.startsWith("/admin/");
+  const title = admin ? `Agent 接入 · ${SITE.name} 后台` : "Agent 接入";
+  return pageMeta({ title, rawTitle: admin, description: `让 Agent 直接使用 ${SITE.name}：MCP、RSS、REST API v1，匿名只读。`, path, image: "/og/pages/agent.png" });
 }
 
 function Section({ title, children, id }: { title: string; children: ReactNode; id?: string }) {
@@ -205,8 +209,9 @@ function ApiTab({ base }: { base: string }) {
 }
 
 export default function AgentPage() {
-  const { tab: initialTab, healthy, base } = useLoaderData<typeof loader>();
+  const { tab: initialTab, healthy, base, basePath } = useLoaderData<typeof loader>();
   const [params] = useSearchParams();
+  const { pathname } = useLocation();
   const navigate = useNavigate();
   const [tab, setTab] = useState<TabKey>(initialTab);
 
@@ -214,7 +219,7 @@ export default function AgentPage() {
 
   const select = (key: TabKey) => {
     setTab(key);
-    navigate(key === "mcp" ? "/agent" : `/agent?tab=${key}`, { replace: true, preventScrollReset: true });
+    navigate(key === "mcp" ? basePath : `${basePath}?tab=${key}`, { replace: true, preventScrollReset: true });
   };
 
   const pill = "inline-flex h-6 items-center rounded-mark border border-line bg-surface px-2 text-[11.5px] text-ink-3";
@@ -235,7 +240,7 @@ export default function AgentPage() {
       </AsideCard>
       <AsideCard title="没接上？">
         <p className="text-[13px] leading-[1.75] text-ink-3">把客户端、版本和报错写在反馈页，别发 token 或本地文件。</p>
-        <Link to="/feedback" prefetch="intent" className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-accent hover:underline">
+        <Link to={pathname.startsWith("/admin/") ? "/admin/feedback" : "/feedback"} prefetch="intent" className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-accent hover:underline">
           去反馈 <IconChevronRight size={14} />
         </Link>
       </AsideCard>

@@ -21,6 +21,7 @@ The final capture was opened after the latest Docker build and compared with the
 - Toolbar: search placeholder and the two filter buttons were checked.
 - Admin chrome: the sidebar now uses the same 280px workspace rhythm, blue tokens, wordmark, icon navigation, grouped “信源与业务” section, and shared theme switch as the homepage. Backend links to 信源, 业务匹配, Agent 接入, 关于, and 更新日志 were checked as navigation entries.
 - Linked product pages: Agent 接入、关于、更新日志 now mount the same radar shell as the homepage, so their sidebar, page background, cards, borders, and active states use the same cool blue palette.
+- Admin route audit: every一级后台菜单 now lands under `/admin/`, including `/admin/agent`, `/admin/about`, and `/admin/changelog`; Agent tab switches and feedback links stay inside the admin namespace.
 - Theme control: 深色、浅色、跟随系统 were each selected. The `data-theme`, shell background, sidebar background, and selected radio state changed as expected on both homepage and admin.
 
 ## Findings
@@ -47,6 +48,7 @@ No actionable P0/P1/P2 visual findings remain. The live data count and article w
 - [x] Align backend layout, menu grouping, icons, and theme controls with the homepage shell.
 - [x] Put Agent 接入、关于、更新日志 into the backend menu.
 - [x] Apply the homepage blue shell palette to Agent 接入、关于、更新日志.
+- [x] Keep every backend一级菜单 link under the `/admin/` route namespace.
 - [x] Verify light, dark, and system theme buttons change the rendered workspace.
 - [x] Rebuild Docker Desktop services and verify the page responds.
 - [x] Check browser console logs and primary interactions.

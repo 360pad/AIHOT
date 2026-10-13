@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link, useLoaderData } from "react-router";
+import { Link, useLoaderData, useLocation } from "react-router";
+import type { Route } from "./+types/about";
 import type { SiteStats } from "@aihot/contracts/site";
 import { apiGet } from "../lib/api.server";
 import { shortSourceName } from "../lib/format";
@@ -30,8 +31,9 @@ export async function loader({ request }: { request: Request }) {
   return { contact, stats };
 }
 
-export function meta() {
-  return pageMeta({ title: "关于", description: `关于 ${SITE.name}：${SITE.description}`, path: "/about", image: "/og/pages/about.png", jsonLd: organizationLd() });
+export function meta({ location }: Route.MetaArgs) {
+  const title = location.pathname.startsWith("/admin/") ? `关于 · ${SITE.name} 后台` : "关于";
+  return pageMeta({ title, rawTitle: location.pathname.startsWith("/admin/"), description: `关于 ${SITE.name}：${SITE.description}`, path: location.pathname, image: "/og/pages/about.png", jsonLd: organizationLd() });
 }
 
 const NO_SOURCES: RiverSource[] = [];
@@ -136,7 +138,7 @@ function QrCard({ src, kind, title, note }: { src: string; kind: string; title: 
 }
 
 /** The optional maker block (ABOUT.maker): a greeting on the left, the contact codes that are set on the right. */
-function Maker({ maker, contact }: { maker: NonNullable<typeof ABOUT.maker>; contact: ContactSettings }) {
+function Maker({ maker, contact, admin }: { maker: NonNullable<typeof ABOUT.maker>; contact: ContactSettings; admin: boolean }) {
   const codes = [
     contact.wechatQr && maker.wechat ? <QrCard key="wechat" src={contact.wechatQr} kind="微信公众号" title={maker.wechat.title} note={maker.wechat.note} /> : null,
     contact.feishuQr && maker.feishu ? <QrCard key="feishu" src={contact.feishuQr} kind="飞书群" title={maker.feishu.title} note={maker.feishu.note} /> : null,
@@ -157,11 +159,11 @@ function Maker({ maker, contact }: { maker: NonNullable<typeof ABOUT.maker>; con
           ))}
           <p className="text-ink-3">
             它一直在改，改了什么都写在
-            <Link to="/changelog" className="text-accent hover:underline">
+            <Link to={admin ? "/admin/changelog" : "/changelog"} className="text-accent hover:underline">
               更新日志
             </Link>
             里；有想法、遇到问题，去
-            <Link to="/feedback" className="text-accent hover:underline">
+            <Link to={admin ? "/admin/feedback" : "/feedback"} className="text-accent hover:underline">
               反馈页
             </Link>
             告诉我。
@@ -194,6 +196,8 @@ function Latest({ item, className = "" }: { item: SiteStats["latest"][number] | 
 
 export default function AboutPage() {
   const { contact, stats } = useLoaderData<typeof loader>();
+  const { pathname } = useLocation();
+  const admin = pathname.startsWith("/admin/");
   const [focus, setFocus] = useState<number | null>(null);
   const [at, setAt] = useState(0);
   const shown = useRef(0);
@@ -269,11 +273,11 @@ export default function AboutPage() {
         </ol>
       </section>
 
-      {ABOUT.maker && <Maker maker={ABOUT.maker} contact={contact} />}
+      {ABOUT.maker && <Maker maker={ABOUT.maker} contact={contact} admin={admin} />}
 
       <p className="mt-16 well rounded-card px-5 py-4 text-[13px] leading-[1.85] text-ink-3">
         {ABOUT.copyright}
-        <Link to="/feedback" className="text-accent hover:underline">
+        <Link to={admin ? "/admin/feedback" : "/feedback"} className="text-accent hover:underline">
           反馈页
         </Link>
         联系我们。

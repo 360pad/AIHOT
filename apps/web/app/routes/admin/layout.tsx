@@ -69,9 +69,9 @@ const NAV: Array<{ group: string; items: Array<{ to: string; label: string; coun
   {
     group: "更多",
     items: [
-      { to: "/agent", label: "Agent 接入", icon: IconPlug },
-      { to: "/about", label: "关于", icon: IconHeart },
-      { to: "/changelog", label: "更新日志", icon: IconHistory },
+      { to: "/admin/agent", label: "Agent 接入", icon: IconPlug },
+      { to: "/admin/about", label: "关于", icon: IconHeart },
+      { to: "/admin/changelog", label: "更新日志", icon: IconHistory },
     ],
   },
 ];
