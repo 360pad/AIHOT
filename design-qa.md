@@ -8,6 +8,7 @@
 - source pixels: 1487 × 1057
 - implementation capture: browser viewport capture at the same desktop state; Chrome device scale factor 1.6 was recorded, so comparison used normalized composition and CSS geometry rather than raw pixel equality
 - state: 招标采购 + 智慧水利，浅色主题，时间轴，AI 评分，预算与截止时间指标
+- admin capture: `http://localhost:3002/admin/business`, verified after the final Docker rebuild in a fresh Chrome tab
 
 ## Full-view comparison
 
@@ -18,6 +19,8 @@ The final capture was opened after the latest Docker build and compared with the
 - Left navigation: stage selection, industry selection, divider, daily/favorites, and backend management entry were checked against the source.
 - First timeline row: title baseline, rail node, metadata row, score pill, summary line, budget formatting, and deadline column were checked.
 - Toolbar: search placeholder and the two filter buttons were checked.
+- Admin chrome: the sidebar now uses the same 280px workspace rhythm, blue tokens, wordmark, icon navigation, grouped “信源与业务” section, and shared theme switch as the homepage. Backend links to 信源 and 业务匹配 were clicked and returned the expected routes.
+- Theme control: 深色、浅色、跟随系统 were each selected. The `data-theme`, shell background, sidebar background, and selected radio state changed as expected on both homepage and admin.
 
 ## Findings
 
@@ -29,6 +32,7 @@ No actionable P0/P1/P2 visual findings remain. The live data count and article w
 2. The first visual pass had the timeline card content 22px too far left and raw yuan amounts in the budget column. Fixed by widening the rail track and normalizing amounts to 万元 with thousands separators.
 3. Final pass updated the industry icon rhythm, search placeholder, and date row to `今天 / 共 N 条`; interaction checks for industry navigation, stage navigation, and search all completed without console warnings or errors.
 4. The visual review found the business-stage sidebar too narrow and the card center too empty. Widened the sidebar and industry column to 280px, increased navigation hit areas, and first added a facts block. A follow-up review found that block duplicated the title metadata, so it was replaced with direct budget, publication date, deadline date, and countdown columns without changing the deferred regional filtering scope.
+5. The backend initially kept the warm paper chrome and its theme buttons only changed the document preference while the homepage shell stayed light. Added scoped blue tokens and semantic utility aliases to the shared shell, grouped 信源与业务, added matching icons and theme controls, then verified light/dark/system states in Docker.
 
 ## Implementation Checklist
 
@@ -38,6 +42,8 @@ No actionable P0/P1/P2 visual findings remain. The live data count and article w
 - [x] Preserve the timeline rail and AI scoring.
 - [x] Add budget and deadline metric columns with real-data fallbacks.
 - [x] Balance the wide desktop workspace with direct budget, date, deadline, and countdown columns.
+- [x] Align backend layout, menu grouping, icons, and theme controls with the homepage shell.
+- [x] Verify light, dark, and system theme buttons change the rendered workspace.
 - [x] Rebuild Docker Desktop services and verify the page responds.
 - [x] Check browser console logs and primary interactions.
 

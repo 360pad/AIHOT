@@ -1,7 +1,7 @@
 // Inline stroke icons (no icon-font or network requests).
 import type { SVGProps } from "react";
 
-type P = SVGProps<SVGSVGElement> & { size?: number };
+export type P = SVGProps<SVGSVGElement> & { size?: number };
 
 function Svg({ size = 18, children, ...rest }: P & { children: React.ReactNode }) {
   return (

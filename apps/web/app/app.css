@@ -391,8 +391,8 @@
   }
 }
 
-/* Homepage visual language from the accepted Tender Radar mockup. The rest of the site keeps the
-   editorial paper theme; the radar shell uses the cool blue workspace palette only on /. */
+/* Tender Radar workspace visual language from the accepted homepage mockup. Editorial pages keep the
+   paper theme; homepage and admin shells share the cool blue workspace palette. */
 .radar-shell {
   --bg: #f7fbfe;
   --bg-sunk: #eef5fd;
@@ -419,8 +419,101 @@
   --amber: #a67827;
   --amber-ink: #87611d;
   --amber-soft: rgba(190, 145, 54, 0.13);
+  --color-bg: var(--bg);
+  --color-bg-sunk: var(--bg-sunk);
+  --color-bg-muted: var(--bg-muted);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-raised: var(--raised);
+  --color-sidebar: var(--sidebar);
+  --color-daybar: var(--daybar);
+  --color-field: var(--field);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-4: var(--ink-4);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-line-soft: var(--line-soft);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-softer: var(--accent-softer);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-note: var(--note);
+  --color-hot: var(--hot);
+  --color-hot-soft: var(--hot-soft);
+  --color-amber: var(--amber);
+  --color-amber-ink: var(--amber-ink);
+  --color-amber-soft: var(--amber-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-ok-ink: var(--ok-ink);
   background: var(--bg);
 }
+
+:root[data-theme="dark"] .radar-shell {
+  --bg: #0f1b2d;
+  --bg-sunk: #14253d;
+  --bg-muted: #1a304d;
+  --surface: #13243a;
+  --surface-2: #172b45;
+  --raised: #1b314d;
+  --sidebar: #102038;
+  --daybar: #14253d;
+  --field: #142840;
+  --ink: #e6f0ff;
+  --ink-2: #c9dcf4;
+  --ink-3: #91abc9;
+  --ink-4: #7893b5;
+  --line: #27415f;
+  --line-strong: #355475;
+  --line-soft: #1f3855;
+  --accent: #65a2ff;
+  --accent-ink: #83b5ff;
+  --accent-soft: rgba(101, 162, 255, 0.16);
+  --accent-softer: rgba(101, 162, 255, 0.09);
+  --accent-contrast: #081321;
+  --note: #9bb7da;
+  --amber: #e8b65b;
+  --amber-ink: #f0c979;
+  --amber-soft: rgba(232, 182, 91, 0.16);
+}
+
+.radar-shell .radar-sidebar [role="radiogroup"] {
+  border-color: var(--line-strong);
+  background: var(--bg-sunk);
+}
+
+:root[data-theme="dark"] .radar-shell .radar-sidebar nav a[aria-current="page"],
+:root[data-theme="dark"] .radar-shell .radar-industry-item.is-active {
+  background: #1b4374;
+  color: var(--accent);
+}
+:root[data-theme="dark"] .radar-shell .radar-industry-nav { background: rgba(15, 30, 50, 0.9); }
+:root[data-theme="dark"] .radar-shell .radar-toolbar form input,
+:root[data-theme="dark"] .radar-shell .radar-filter-button { background: var(--surface); border-color: var(--line-strong); }
+:root[data-theme="dark"] .radar-shell .radar-item-title-row .rounded-full { background: var(--accent-soft); }
+:root[data-theme="dark"] .radar-shell .radar-item-metric { border-color: var(--line-strong); }
+:root[data-theme="dark"] .radar-shell .radar-timeline-slot > span > span:first-child { background: #345475; }
+
+/* Admin chrome shares the same cool blue workspace language as the homepage. */
+.radar-admin-shell { min-height: 100dvh; color: var(--ink); }
+.radar-admin-sidebar { border-color: var(--line); background: var(--sidebar); }
+.radar-admin-brand { color: var(--ink); }
+.radar-admin-brand .inline-flex { flex: none; }
+.radar-admin-brand-subtitle { color: var(--ink-3); font-size: 16px; font-weight: 650; white-space: nowrap; }
+.radar-admin-nav-label { margin: 0 12px 9px; color: var(--ink-4); font-size: 12px; font-weight: 650; letter-spacing: 0.04em; }
+.radar-admin-nav-item { position: relative; display: flex; min-height: 44px; align-items: center; gap: 12px; border-radius: 9px; padding: 0 13px; color: var(--ink-2); font-size: 15px; transition: background-color 140ms, color 140ms; }
+.radar-admin-nav-item:hover { background: var(--accent-softer); color: var(--ink); }
+.radar-admin-nav-item.is-active { color: var(--accent); font-weight: 700; }
+.radar-admin-nav-icon { display: inline-flex; width: 19px; flex: none; color: currentColor; }
+.radar-admin-footer { border-color: var(--line); }
+.radar-admin-mobile-bar { border-color: var(--line); background: color-mix(in srgb, var(--bg) 88%, transparent); }
+.radar-admin-mobile-link { color: var(--ink-3); }
+.radar-admin-mobile-link:hover { color: var(--ink); }
+.radar-admin-mobile-link.is-active { background: var(--accent); color: var(--accent-contrast); }
+.radar-admin-main { min-width: 0; background: var(--bg); }
 
 .radar-shell .radar-main { padding: 0; }
 .radar-sidebar { border-color: var(--line); background: var(--sidebar); }

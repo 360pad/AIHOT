@@ -311,8 +311,8 @@ export default function MonitorAdmin({ loaderData }: Route.ComponentProps) {
     >
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1.5">
-          <Link to="?tab=events" className={`rounded-full px-3.5 py-1.5 text-[13px] ${tab === "events" ? "bg-ink text-bg" : "bg-surface text-ink-2 ring-1 ring-line"}`}>事件</Link>
-          <Link to="?tab=posts" className={`rounded-full px-3.5 py-1.5 text-[13px] ${tab === "posts" ? "bg-ink text-bg" : "bg-surface text-ink-2 ring-1 ring-line"}`}>帖子与识别</Link>
+          <Link to="?tab=events" className={`rounded-full px-3.5 py-1.5 text-[13px] ${tab === "events" ? "bg-accent text-accent-contrast" : "bg-surface text-ink-2 ring-1 ring-line"}`}>事件</Link>
+          <Link to="?tab=posts" className={`rounded-full px-3.5 py-1.5 text-[13px] ${tab === "posts" ? "bg-accent text-accent-contrast" : "bg-surface text-ink-2 ring-1 ring-line"}`}>帖子与识别</Link>
         </div>
         {tab === "events" ? (
           <Link to={sp.get("withdrawn") ? "?tab=events" : "?tab=events&withdrawn=1"} className="text-[12.5px] text-ink-3 hover:text-ink">{sp.get("withdrawn") ? "隐藏已撤回" : "包括已撤回"}</Link>

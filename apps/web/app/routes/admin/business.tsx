@@ -179,7 +179,7 @@ function SubnavSection({ title, hint, children }: { title: string; hint: string;
 }
 
 function SubnavItem({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
-  return <button type="button" onClick={onClick} className={`flex min-h-9 w-full items-center rounded-control px-2.5 text-left text-[13px] transition-colors ${active ? "bg-ink text-bg font-medium" : "text-ink-2 hover:bg-bg-sunk hover:text-ink"}`}><span className="min-w-0 truncate">{children}</span></button>;
+  return <button type="button" onClick={onClick} className={`flex min-h-9 w-full items-center rounded-control px-2.5 text-left text-[13px] transition-colors ${active ? "bg-accent-soft text-accent font-medium" : "text-ink-2 hover:bg-bg-sunk hover:text-ink"}`}><span className="min-w-0 truncate">{children}</span></button>;
 }
 
 function SubnavAction({ onClick, children }: { onClick: () => void; children: string }) {
