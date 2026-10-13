@@ -391,8 +391,8 @@
   }
 }
 
-/* Tender Radar workspace visual language from the accepted homepage mockup. Editorial pages keep the
-   paper theme; homepage and admin shells share the cool blue workspace palette. */
+/* Tender Radar workspace visual language from the accepted homepage mockup. Homepage, linked product
+   pages, and admin shells share the cool blue workspace palette. */
 .radar-shell {
   --bg: #f7fbfe;
   --bg-sunk: #eef5fd;

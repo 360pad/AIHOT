@@ -70,9 +70,9 @@ export function meta({ error }: Route.MetaArgs) {
 function SiteShell({ changelogVersion, children }: { changelogVersion: string | null; children: ReactNode }) {
   const navigation = useNavigation();
   const { pathname } = useLocation();
-  const home = pathname === "/";
+  const radarPage = pathname === "/" || pathname === "/agent" || pathname === "/about" || pathname === "/changelog";
   return (
-    <div className={`flex min-h-dvh ${home ? "radar-shell" : ""}`}>
+    <div className={`flex min-h-dvh ${radarPage ? "radar-shell" : ""}`}>
       <NavigationProgress active={navigation.state === "loading"} />
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[70] focus:rounded-control focus:bg-surface focus:px-3 focus:py-2">
         跳到正文
