@@ -58,4 +58,46 @@ No actionable P0/P1/P2 visual findings remain. The live data count and article w
 - P3: replace the generic industry icons with the final product icon set if the team has a preferred library.
 - P3: expose structured budget, location, procurement method, and deadline fields from the backend so the metric columns do not need text extraction fallbacks.
 
+## 行业动态效果图实现 QA
+
+### 对比目标
+
+- source visual truth: `/Users/360pad/.codex/generated_images/01a12f91-979f-71d0-bbab-9760de151ce4/exec-f57c854d-2d76-41bb-8111-ac84fbd03bfe.png`
+- implementation: `http://localhost:3002/industry`
+- implementation capture: Codex in-app browser, viewport 1600 × 900, after the final Docker rebuild
+- state: 行业动态 · 地质与矿业，浅色主题，今日获取，时间轴列表，站内 Markdown 阅读器
+
+### Full-view comparison
+
+The implementation keeps the existing Tender Radar shell and adds the reference composition as a parallel industry workspace: primary navigation on the left, a calm secondary category rail, a blue search and time toolbar, a dated timeline with colored status tags and AI reference value, and a split in-app Markdown reader. The reader preserves the saved article body, source status, original publication time, system collection time, outline, image, quote, and favorite action; the more menu now only opens the original external source.
+
+### Focused regions
+
+- Navigation: 招标信息、行业动态、商机日报、收藏 remain in the same primary shell; the industry category rail exposes counts derived from today’s collected documents and can be collapsed and expanded.
+- Timeline: 今日获取、最近 7 日、历史资料、全部 tabs work with category and keyword filtering. Article rows keep the time rail, source type, historical/today tags, topics, summary, and dual timestamps.
+- Reader: article content stays inside the product, with the saved Markdown badge, source follow state, unfollow confirmation, preserved history notice, table-of-contents links, generated geological model image, quote treatment, favorite state, and a single “打开原文” external link for source verification.
+- Toolbar: 内容类型 and 收录时间 menus now apply filters; no-result searches clear the reader and show an explicit empty state.
+- Responsive behavior: at 1600px the split workspace fits without horizontal overflow; the reader can expand below the timeline and the mobile breakpoint switches to a single-column reading flow.
+
+### Business and boundary checks
+
+- `node --experimental-strip-types --test apps/web/tests/industry.test.ts`: 3 passed, covering today/history separation, category/search boundaries, and Markdown metadata/blockquote preservation.
+- Browser checks: historical tab, content-type filter, collection-time filter, no-result search, category collapse/restore, reader expand, source cancel-follow confirmation, history-preserving notice, and the external source link menu all completed.
+- Browser console: no error or warning entries after the final Docker rebuild.
+
+### Findings
+
+No actionable P0/P1/P2 visual or business-flow findings remain. The fixture count and article wording are intentionally representative data for the prototype; the filtering, saved Markdown reader, source state, and empty-state behavior are implemented as real client interactions.
+
+### 2026-10-14 bug-fix verification
+
+- `/` and `/industry` now share the same primary 招标信息 / 行业动态 entries; navigating to 招标信息 keeps 行业动态 available.
+- The industry category rail was reduced to 228px, giving the timeline and reader more working width.
+- Tabs and the timeline remain in the left panel while the reader starts directly below the search toolbar; its expanded state overlays the complete main workspace, including the timeline, without covering the primary or category navigation.
+- At a 1600 × 900 browser viewport, the normal and expanded states were checked with no horizontal overflow and no browser console errors.
+- The expanded reader now fills the main workspace to the bottom (`top=180`, `bottom=1149` in the browser’s CSS viewport) and locks the outer page at the viewport height; only the reader itself can scroll when its Markdown body is longer than the viewport.
+- The more menu contains exactly one item, “打开原文”, with the article’s original URL and `target=_blank`; the in-product reader remains the full reading surface.
+- The backend source detail adds “公众号处理方式”: “仅采集（推荐）” is the default and writes `_aihot.processingMode=collect_only`; “采集并分析” opts the source into the AI queue. Invalid values are rejected before save.
+- `node --experimental-strip-types --test tests/source-processing-mode.test.ts apps/web/tests/industry.test.ts`: 6 passed. Docker Node 24 production build and service restart completed; local host `npm run typecheck` reached the web typecheck but was blocked by the host’s Node 22.14.0 runtime, while package-level backend and web `tsc --noEmit` checks passed.
+
 final result: passed

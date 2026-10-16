@@ -15,12 +15,24 @@ import { ensureQueue, enqueue, QUEUES, shutdownSignal } from "./queue.ts";
 
 /** Minutes to wait after the n-th failed attempt; one more failure after the last ends in "failed". */
 const RETRY_MINUTES = [5, 10, 20, 40, 60, 120, 240, 360];
+const PAYMENT_RETRY_MINUTES = 15;
+const MAX_PAYMENT_REJECTIONS = 2;
 /** Unusable model output is retried less: each retry is a paid call. */
 const MAX_OUTPUT_FAILURES = 3;
 /** Extraction gives up after this many errors and the article is judged on what it has. */
 const MAX_EXTRACT_FAILURES = 3;
 /** A queued article whose job left no trace for this long is queued again. */
 const QUEUED_STALE = "30 minutes";
+
+/** A gateway can briefly return 402 while its account or route is catching up; cap retries to one. */
+export function contentRetryDelayMinutes(error: unknown, attempts: number): number | null {
+  if (error instanceof ProviderRejectedError && error.status === 402) {
+    return attempts < MAX_PAYMENT_REJECTIONS ? PAYMENT_RETRY_MINUTES : null;
+  }
+  if (error instanceof ProviderRejectedError && !error.retryable) return null;
+  if (attempts > RETRY_MINUTES.length || (error instanceof ModelOutputError && attempts >= MAX_OUTPUT_FAILURES)) return null;
+  return RETRY_MINUTES[attempts - 1] ?? null;
+}
 
 type Step = "extract" | "analyze";
 
@@ -93,6 +105,17 @@ export async function settleNonEditorial(articleId: string): Promise<{ group: bo
   return { group: row.participation_mode === "hot_signal" && !isHistorical(row) };
 }
 
+/** Saves a source item without paying for AI analysis, while keeping it readable in the site. */
+export async function settleCollectedArticle(articleId: string): Promise<boolean> {
+  const [row] = await sql<{ id: string }[]>`
+    UPDATE articles a SET processing_state = 'skipped', processing_attempts = 0, processing_retry_at = NULL, processing_queued_at = NULL
+    FROM sources s WHERE s.id = a.source_id AND a.id = ${articleId} AND s.kind = 'mp_account'
+    RETURNING a.id`;
+  if (!row) return false;
+  await publishArticle(articleId);
+  return true;
+}
+
 /** attemptTag makes an explicit re-evaluation a new (paid) request; the same tag reuses its receipt. */
 export async function processArticle(articleId: string, opts: { attemptTag?: string } = {}): Promise<{ state: string }> {
   const [found] = await sql<{ participation_mode: string; processing_state: string; revision: number; backfill: boolean; published_at: Date | null; discovered_at: Date }[]>`
@@ -114,6 +137,7 @@ export async function processArticle(articleId: string, opts: { attemptTag?: str
       return { state: "fetching-body" };
     }
     if (result.stale) return { state: "stale" }; // the newer revision has its own job
+    if (result.output.relevance === "block") return { state: "discarded" };
     await publishArticle(articleId);
     // History is archived but founds no event (isHistorical).
     if (result.output.relevance === "pass" && !row.historical) await enqueue(QUEUES.group, { articleId }, { singletonKey: articleId, priority: PRIORITY.live });
@@ -144,14 +168,13 @@ async function afterFailure(articleId: string, error: unknown): Promise<{ state:
   }
   const [a] = await sql<{ processing_attempts: number }[]>`SELECT processing_attempts FROM articles WHERE id = ${articleId}`;
   const attempts = (a?.processing_attempts ?? 0) + 1;
-  const refused = error instanceof ProviderRejectedError && !error.retryable;
-  const exhausted = attempts > RETRY_MINUTES.length || (error instanceof ModelOutputError && attempts >= MAX_OUTPUT_FAILURES);
-  if (refused || exhausted) {
+  const delayMinutes = contentRetryDelayMinutes(error, attempts);
+  if (delayMinutes === null) {
     await sql`UPDATE articles SET processing_state = 'failed', processing_error = ${message}, processing_attempts = ${attempts},
                 processing_retry_at = NULL, processing_queued_at = NULL WHERE id = ${articleId}`;
     return { state: "failed" };
   }
-  const retryAt = new Date(Date.now() + RETRY_MINUTES[attempts - 1]! * 60_000);
+  const retryAt = new Date(Date.now() + delayMinutes * 60_000);
   await sql`UPDATE articles SET processing_state = 'new', processing_error = ${message}, processing_attempts = ${attempts},
               processing_retry_at = ${retryAt}, processing_queued_at = NULL WHERE id = ${articleId}`;
   return { state: "retrying", retryAt };

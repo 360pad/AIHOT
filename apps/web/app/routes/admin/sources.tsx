@@ -43,7 +43,7 @@ export default function Sources({ loaderData }: Route.ComponentProps) {
   const [sp] = useSearchParams();
   const navigate = useNavigate();
   return (
-    <AdminPage
+    <AdminPage wide
       title="信源"
       subtitle="列表按健康度排序：失败的在最前。点进详情可以预览抓取、手动采集、调整频率与参与方式。"
       actions={<ButtonLink to="/admin/sources/new" tone="primary">新建信源</ButtonLink>}

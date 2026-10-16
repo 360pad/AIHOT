@@ -13,7 +13,7 @@ export function ReportLayout({ kind, index, current, today, children }: { kind: 
       <ReportArchive kind={kind} index={index} current={current} />
       <div className="min-w-0 flex-1 pb-6 lg:flex lg:flex-col lg:items-center lg:px-10 lg:pb-16 lg:pt-9">
         <ReportPhoneNav kind={kind} index={index} current={current} today={today} />
-        <div className="w-full lg:max-w-[1160px]">{children}</div>
+        <div className="w-full lg:max-w-[1440px]">{children}</div>
       </div>
     </div>
   );

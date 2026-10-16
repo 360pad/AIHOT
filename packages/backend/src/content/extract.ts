@@ -9,6 +9,7 @@ import { jinaRead } from "../providers/jina.ts";
 import { BudgetExceededError } from "../providers/receipts.ts";
 import { getArticle } from "../providers/socialdata.ts";
 import { onlyXArticleLink, xArticleText } from "../sources/x.ts";
+import { isEmptyContractTemplate } from "./quality.ts";
 import { sanitizeBody, trimTrailingChrome } from "./sanitize.ts";
 import { contentHash } from "./materials.ts";
 
@@ -74,7 +75,10 @@ export async function extractFromUrl(url: string, opts: { allowJina: boolean; su
     const type = res.headers.get("content-type") ?? "";
     if (res.status === 200 && /html/.test(type)) {
       const got = readable(res.text(), res.url);
-      if (got) return got;
+      if (got) {
+        if (isEmptyContractTemplate(got.text)) return null;
+        return got;
+      }
     }
   } catch {
     // fall through to Jina
@@ -84,7 +88,7 @@ export async function extractFromUrl(url: string, opts: { allowJina: boolean; su
     const page = await jinaRead(url, { purpose: "body_fallback", subject: opts.subject });
     const html = trimTrailingChrome(sanitizeBody(markdownToHtml(page.markdown), url));
     const text = stripTags(html);
-    if (text.length < MIN_BODY_CHARS) return null;
+    if (text.length < MIN_BODY_CHARS || isEmptyContractTemplate(text)) return null;
     return { html, text, images: [], via: "jina" };
   } catch (error) {
     if (error instanceof BudgetExceededError) return null;

@@ -4,6 +4,7 @@ import { sql } from "../db.ts";
 import { collapseWhitespace, truncate } from "../lib/text.ts";
 import { produceImage } from "../media/images.ts";
 import type { ContentPart } from "../providers/llm.ts";
+import { articleText } from "../content/quality.ts";
 
 export interface AnalyzeInputArticle {
   id: string;
@@ -90,7 +91,7 @@ export function buildMaterial(a: AnalyzeInputArticle): string {
     if (a.translationZh) lines.push(`帖子中文译文：\n${truncate(a.translationZh, 4000)}`);
   } else {
     lines.push(`标题：${collapseWhitespace(a.title)}`);
-    const body = a.bodyText ?? a.excerpt ?? "";
+    const body = articleText(a.bodyText, a.excerpt) ?? "";
     lines.push(body ? `正文：\n${truncate(body, 7000)}` : "正文：（无）");
     if (a.translationZh && !a.bodyText) lines.push(`正文中文译文：\n${truncate(a.translationZh, 5000)}`);
   }

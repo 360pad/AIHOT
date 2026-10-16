@@ -53,6 +53,26 @@ async function article(): Promise<string> {
   return articleId;
 }
 
+test("expired procurement notices leave the current pool, while awarded results remain available for learning", async () => {
+  const expired = await article();
+  await sql`UPDATE analyses SET title_zh = ${`EXPIRED-TENDER-${T}`}, summary_zh = '过期招标摘要',
+      output = ${sql.json({ itemType: "tender_notice", deadlineStatus: "passed" })}
+    WHERE article_id = ${expired}`;
+  await publishArticle(expired, released());
+  const expiredPool = JSON.parse((await get(`/api/site/pool?q=EXPIRED-TENDER-${T}`)).body) as { items: Array<{ id: string }> };
+  assert.ok(!expiredPool.items.some((item) => item.id === expired), "a passed tender is not shown as a current opportunity");
+  const expiredPage = JSON.parse((await get(`/api/site/items/${expired}`)).body) as { id: string };
+  assert.equal(expiredPage.id, expired, "the historical item remains readable for review");
+
+  const awarded = await article();
+  await sql`UPDATE analyses SET title_zh = ${`AWARD-LEARNING-${T}`}, summary_zh = '中标结果学习样本',
+      output = ${sql.json({ itemType: "award_result", deadlineStatus: "passed" })}
+    WHERE article_id = ${awarded}`;
+  await publishArticle(awarded, released());
+  const awardedPool = JSON.parse((await get(`/api/site/pool?q=AWARD-LEARNING-${T}`)).body) as { items: Array<{ id: string }> };
+  assert.ok(awardedPool.items.some((item) => item.id === awarded), "award information stays available outside the current-bid opportunity cutoff");
+});
+
 async function storyFor(id: string, role: "report" | "mention" = "report"): Promise<string> {
   const publicId = randomUUID();
   const [story] = await sql<{ id: number }[]>`

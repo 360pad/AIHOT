@@ -202,7 +202,7 @@ export async function chatJson<S extends z.ZodType>(opts: ChatJsonOptions<S>): P
       }
       const text = await res.text();
       if (!res.ok) {
-        const retryable = res.status === 429 || res.status >= 500;
+        const retryable = res.status === 402 || res.status === 429 || res.status >= 500;
         throw new ProviderRejectedError(`HTTP ${res.status}: ${text.slice(0, 500)}`, res.status, retryable);
       }
       let json: Record<string, unknown>;

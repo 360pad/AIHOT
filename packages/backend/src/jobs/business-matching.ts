@@ -22,6 +22,14 @@ export async function registerBusinessMatchingJobs(boss: PgBoss) {
         body: test.body,
         url: test.source_url,
       });
+      if (result.label === "BLOCK") {
+        await sql.begin(async (tx) => {
+          await tx`DELETE FROM business_matching_feedback WHERE test_id = ${test.id}`;
+          await tx`DELETE FROM audit_log WHERE subject = ${`business-test:${test.id}`}`;
+          await tx`DELETE FROM business_matching_tests WHERE id = ${test.id}`;
+        });
+        return { status: "discarded" };
+      }
       await sql`UPDATE business_matching_tests SET status = 'succeeded', result = ${sql.json(result as never)}, error = NULL, updated_at = now() WHERE id = ${test.id}`;
       return { status: "succeeded", testId: test.id };
     } catch (error) {

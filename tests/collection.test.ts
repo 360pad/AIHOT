@@ -33,9 +33,11 @@ const socialdata = await stub((_hit, req) => {
 // Dajiala: one new post whose body answers 503 the first time.
 const MP_URL = `https://mp.weixin.qq.com/s/test-${T}`;
 let bodyCalls = 0;
+let historyLookup: Record<string, unknown> | null = null;
 const dajiala = await stub((_hit, req) => {
   if (req.url.startsWith("/fbmain/monitor/v3/post_history")) {
-    return { code: 0, data: [{ position: 1, url: MP_URL, title: `公众号文章 ${T}`, post_time: Math.floor(Date.now() / 1000) - 3600, digest: "摘要", sn: `sn-${T}` }], remain_money: 100 };
+    historyLookup = JSON.parse(req.body) as Record<string, unknown>;
+    return { code: 0, ghid: `gh_${T}`, nickname: "地质", data: [{ position: 1, url: MP_URL, title: `公众号文章 ${T}`, post_time: Math.floor(Date.now() / 1000) - 3600, digest: "摘要", sn: `sn-${T}` }], remain_money: 100 };
   }
   bodyCalls += 1;
   if (bodyCalls === 1) return new Reply(503, { error: "busy" });
@@ -55,7 +57,7 @@ before(async () => {
   await sql`INSERT INTO sources (id, name, kind, config, tier, participation_mode, cursor, next_fetch_at)
             VALUES (${X_SOURCE}, 'Test X', 'x_search', ${sql.json({ query: `from:acct${T}` })}, 'T1', 'editorial',
                     ${sql.json({ initializedAt: new Date().toISOString(), lastTweetId: String(WATERMARK) })}, '2100-01-01'),
-                   (${MP_SOURCE}, 'Test mp', 'mp_account', ${sql.json({ ghid: `gh_${T}` })}, 'T1', 'editorial',
+                   (${MP_SOURCE}, 'Test mp', 'mp_account', ${sql.json({ url: MP_URL, nickname: "地质" })}, 'T1', 'editorial',
                     ${sql.json({ lastCheckedAt: new Date().toISOString() })}, '2100-01-01')`;
 });
 after(async () => {
@@ -85,13 +87,15 @@ test("an X search longer than one run is read to the old watermark over the next
   assert.equal(socialdata.hits(), 20 + 1 + 3, "no page is requested twice");
 });
 
-test("a WeChat body that failed for a passing reason is fetched on the next check and analysed again", async () => {
+test("a WeChat body that failed for a passing reason is fetched on the next check without AI analysis", async () => {
   const article = async () =>
     (await sql<{ body_status: string; revision: number; retry: { attempts: number } | null }[]>`
       SELECT body_status, revision, raw->'dajiala'->'bodyRetry' AS retry FROM articles WHERE source_id = ${MP_SOURCE}`)[0]!;
 
   const first = await checkMpAccount(MP_SOURCE, "manual");
   assert.equal(first.status, "ok");
+  assert.deepEqual({ url: historyLookup?.url, nickname: historyLookup?.nickname }, { url: MP_URL, nickname: "地质" });
+  assert.equal((await sql<{ config: { ghid: string; nickname: string } }[]>`SELECT config FROM sources WHERE id = ${MP_SOURCE}`)[0]!.config.ghid, `gh_${T}`);
   assert.deepEqual({ ...(await article()) }, { body_status: "none", revision: 1, retry: { attempts: 1, error: "dajiala HTTP 503" } });
 
   const second = await checkMpAccount(MP_SOURCE, "manual");
@@ -100,7 +104,7 @@ test("a WeChat body that failed for a passing reason is fetched on the next chec
   const now = await article();
   assert.deepEqual([now.body_status, now.revision, now.retry], ["ok", 2, null], "the body arrives as a new revision and retrying stops");
   const [queued] = await sql<{ processing_state: string }[]>`SELECT processing_state FROM articles WHERE source_id = ${MP_SOURCE}`;
-  assert.equal(queued!.processing_state, "new", "the article goes back to analysis");
+  assert.equal(queued!.processing_state, "skipped", "公众号默认只保存采集结果");
 
   await checkMpAccount(MP_SOURCE, "manual");
   assert.equal(bodyCalls, 2, "a body already stored is not bought again");

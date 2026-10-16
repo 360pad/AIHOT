@@ -3,12 +3,13 @@
 import { sql } from "../db.ts";
 import { upsertMaterial } from "../content/materials.ts";
 import { enqueue, QUEUES } from "../jobs/queue.ts";
-import { queueProcessing } from "../jobs/content.ts";
+import { queueProcessing, settleCollectedArticle } from "../jobs/content.ts";
 import { stripTags } from "../lib/text.ts";
 import { sanitizeBody } from "../content/sanitize.ts";
 import { identityKeyForUrl } from "../lib/url.ts";
 import { mpArticle, mpHistory, type MpArticle } from "../providers/dajiala.ts";
 import { BudgetExceededError, ProviderRejectedError } from "../providers/receipts.ts";
+import { processingModeOf } from "./processing-mode.ts";
 
 const MAX_NEW_PER_CHECK = 8;
 /** Posts older than this on the first check of an account are history, not news. */
@@ -31,7 +32,7 @@ async function fetchBody(url: string, sourceId: string, identity: string): Promi
 interface MpSource {
   id: string;
   name: string;
-  config: { wxid?: string; ghid?: string; nickname?: string };
+  config: { wxid?: string; ghid?: string; nickname?: string; url?: string; _aihot?: { processingMode?: string } };
   cursor: Record<string, unknown> | null;
   enabled: boolean;
   participation_mode: string;
@@ -41,15 +42,19 @@ export async function checkMpAccount(sourceId: string, reason: "schedule" | "man
   const [source] = await sql<MpSource[]>`SELECT id, name, config, cursor, enabled, participation_mode FROM sources WHERE id = ${sourceId} AND kind = 'mp_account'`;
   if (!source) return { sourceId, status: "missing" as const };
   if (!source.enabled && reason !== "manual") return { sourceId, status: "paused" as const };
-  const ghid = source.config.ghid ?? source.config.wxid;
-  if (!ghid) return { sourceId, status: "unconfigured" as const };
+  const lookup = { ghid: source.config.ghid ?? source.config.wxid, nickname: source.config.nickname, url: source.config.url };
+  if (!lookup.ghid && !lookup.nickname && !lookup.url) return { sourceId, status: "unconfigured" as const };
   const [run] = await sql<{ id: number }[]>`INSERT INTO fetch_runs (source_id, detail) VALUES (${sourceId}, ${sql.json({ reason })}) RETURNING id`;
   const firstCheck = !source.cursor?.lastCheckedAt;
   let created = 0;
   try {
     // One paid list call per account per 10-minute window, whoever asks.
     const window = `${reason === "schedule" ? "s" : "m"}:${Math.floor(Date.now() / 600_000)}`;
-    const history = await mpHistory(ghid, { subject: sourceId, window });
+    const history = await mpHistory(lookup, { subject: sourceId, window });
+    if (history.ghid && history.ghid !== source.config.ghid) {
+      await sql`UPDATE sources SET name = CASE WHEN name = '微信公众号' AND ${history.nickname ?? null}::text IS NOT NULL THEN ${history.nickname ?? null} ELSE name END,
+        config = ${sql.json({ ...source.config, ghid: history.ghid, nickname: history.nickname ?? source.config.nickname } as never)}, updated_at = now() WHERE id = ${sourceId}`;
+    }
     const posts = [...history.posts].sort((a, b) => b.post_time - a.post_time);
     let fetched = 0;
     for (const p of posts) {
@@ -100,7 +105,8 @@ export async function checkMpAccount(sourceId: string, reason: "schedule" | "man
       if (known) await sql`UPDATE articles SET raw = raw #- '{dajiala,bodyRetry}' WHERE id = ${known.id}`;
       if (res.created || res.revised) {
         created += res.created ? 1 : 0;
-        await queueProcessing(res.articleId);
+        if (processingModeOf("mp_account", source.config) === "collect_only") await settleCollectedArticle(res.articleId);
+        else await queueProcessing(res.articleId);
       }
     }
     const cursor = { ...(source.cursor ?? {}), lastCheckedAt: new Date().toISOString(), lastPostTime: posts[0]?.post_time ?? source.cursor?.lastPostTime ?? null, remainMoney: history.remainMoney };

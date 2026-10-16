@@ -11,6 +11,7 @@ import { assertSupportedConfig } from "../sources/config-keys.ts";
 import type { SourceRow } from "../sources/types.ts";
 import { fetchWebList } from "../sources/web-list.ts";
 import { fetchXSearch } from "../sources/x.ts";
+import { fetchScheduledSourcesNow } from "../sources/collect.ts";
 import { audit } from "./auth.ts";
 
 export class Conflict extends Error {
@@ -148,6 +149,12 @@ const CreateSchema = z
 
 /** The address a source collects from, used to find duplicates before creating one. */
 export function sourceIdentity(kind: string, config: Record<string, unknown>): string | null {
+  if (kind === "mp_account") {
+    const accountUrl = typeof config.url === "string" ? config.url.trim() : "";
+    if (accountUrl) return normalizeUrl(accountUrl) ?? accountUrl;
+    const account = config.ghid ?? config.wxid ?? config.nickname;
+    return account ? `mp:${String(account).trim().toLowerCase()}` : null;
+  }
   const raw = (config.feedUrl ?? config.url ?? config.listUrl ?? config.endpoint ?? null) as string | null;
   if (kind === "x_search") {
     const m = /from:([A-Za-z0-9_]{1,15})/.exec(String(config.query ?? ""));
@@ -189,7 +196,39 @@ export async function fetchNow(id: string, actor: string) {
   const jobId =
     s.kind === "mp_account"
       ? await enqueue(QUEUES.mpCheck, { sourceId: id, reason: "manual" }, { singletonKey: `mp:${id}` })
-      : await enqueue(QUEUES.fetchSource, { sourceId: id, force: true }, { singletonKey: `manual:${id}` });
+      : await enqueue(QUEUES.fetchSource, { sourceId: id, force: true }, { singletonKey: id });
   await audit(actor, "source.fetch", `source:${id}`, null, null, { jobId });
   return { jobId };
+}
+
+export async function fetchScheduledNow(actor: string) {
+  const result = await fetchScheduledSourcesNow();
+  await audit(actor, "sources.fetch_scheduled", "sources:tender", null, null, result);
+  return result;
+}
+
+export async function collectionStatus() {
+  const [fetch] = await sql<{ runs: number; ok: number; failed: number; found: number; created: number }[]>`
+    SELECT count(*)::int AS runs,
+           count(*) FILTER (WHERE fr.status = 'ok')::int AS ok,
+           count(*) FILTER (WHERE fr.status = 'failed')::int AS failed,
+           coalesce(sum(fr.found_count), 0)::int AS found,
+           coalesce(sum(fr.new_count), 0)::int AS created
+    FROM fetch_runs fr JOIN sources s ON s.id = fr.source_id
+    WHERE s.kind IN ('rss', 'web_list', 'json_list') AND fr.started_at > now() - interval '2 hours'`;
+  const [processing] = await sql<{ pending: number; failed: number; analyzed: number; published: number }[]>`
+    SELECT count(*) FILTER (WHERE a.processing_state = 'new')::int AS pending,
+           count(*) FILTER (WHERE a.processing_state = 'failed')::int AS failed,
+           count(*) FILTER (WHERE a.processing_state = 'analyzed')::int AS analyzed,
+           (SELECT count(*)::int FROM publications p JOIN sources ps ON ps.id = p.source_id
+            WHERE ps.kind IN ('rss', 'web_list', 'json_list') AND p.discovered_at > now() - interval '2 hours') AS published
+    FROM articles a JOIN sources s ON s.id = a.source_id
+    WHERE s.kind IN ('rss', 'web_list', 'json_list') AND a.discovered_at > now() - interval '2 hours'`;
+  const errors = await sql<{ error: string; count: number }[]>`
+    SELECT left(regexp_replace(coalesce(a.processing_error, '未知处理错误'), 'request_id[^,}]*', 'request_id:…', 'gi'), 220) AS error, count(*)::int AS count
+    FROM articles a JOIN sources s ON s.id = a.source_id
+    WHERE s.kind IN ('rss', 'web_list', 'json_list') AND a.processing_state = 'failed'
+      AND a.discovered_at > now() - interval '2 hours'
+    GROUP BY 1 ORDER BY count(*) DESC LIMIT 3`;
+  return { checkedAt: new Date().toISOString(), fetch: fetch ?? { runs: 0, ok: 0, failed: 0, found: 0, created: 0 }, processing: { ...processing ?? { pending: 0, failed: 0, analyzed: 0, published: 0 }, errors } };
 }

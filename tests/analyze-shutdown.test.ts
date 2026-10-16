@@ -25,7 +25,7 @@ let active: {
 const provider = await stub(async (_hit, request) => {
   const body = JSON.parse(request.body);
   const system = String(body.messages[0]?.content ?? "");
-  const step: Step = system.includes("项目机会评分器") ? "score" : system.includes("相关性预筛") ? "prefilter"
+  const step: Step = system.includes("优先级评分器") ? "score" : system.includes("相关性预筛") ? "prefilter"
     : system.includes("资料结构化助手") ? "structure" : "understand";
   active.calls.push(step);
   const count = active.calls.filter(s => s === step).length;
@@ -35,8 +35,18 @@ const provider = await stub(async (_hit, request) => {
   }
   if (step === "structure" && count === 1) { active.structureAsked.open(); await active.structureAnswer.promise; }
   if (step === "understand" && active.writingAnswer) { active.writingAsked!.open(); await active.writingAnswer.promise; }
-  const content = step === "prefilter" ? { label: "PASS", reason: "AI model release" }
-    : step === "score" ? { attentionScore: 80 }
+  const rendered = step === "prefilter" ? JSON.parse(String(body.messages.at(-1)?.content)) as string : "";
+  const title = rendered.match(/【标题】([^\n]*)/)?.[1] ?? "";
+  const content = step === "prefilter" ? {
+    label: "PASS", reason: "AI model release",
+    materialCoverage: { status: "partial", sectionsRead: ["标题"], missing: [], notes: "" },
+    projects: [{ id: "p1", name: title, number: null, lots: [], evidenceIds: ["e1"], tasks: [{
+      id: "p1-t1", name: title, lot: null, action: "采购", object: "软件", methods: [], deliverables: [],
+      purchaseRole: "principal", participation: "standalone", evidenceIds: ["e1"], matches: [{ capabilityId: "software-platform", relation: "direct", rationale: "测试语义匹配", evidenceIds: ["e1"] }],
+    }] }],
+    evidence: [{ id: "e1", quote: title, source: "title", location: null, strength: "explicit" }],
+  }
+    : step === "score" ? { dimensions: Object.fromEntries(["fit", "region", "deadline"].map((key) => [key, { score: 8, reason: "测试材料依据" }])), deadlineStatus: "open" }
       : step === "structure" ? { category: "digital-government", tags: ["城市治理与数字政府", "招标公告"], subjects: [], fact: { title: "数字化项目招标" } }
         : { itemType: "tender_notice", authorRole: "principal", tags: ["城市治理与数字政府", "招标公告"], editorialJudgment: "项目公告披露了明确的建设内容", titleZh: `数字化项目招标 ${T}`, summaryZh: "项目发布招标公告并披露了建设范围。" };
   return { id: `stub-${active.calls.length}`, choices: [{ message: { content: JSON.stringify(content) } }], usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 } };

@@ -26,6 +26,12 @@ export function isPoolEligible(input: {
   return input.participationMode === "editorial" && input.relevance === "pass" && !!input.title && !!input.summary;
 }
 
+/** An expired procurement notice stays in history but no longer appears as a current opportunity. */
+export function isCurrentOpportunity(input: { itemType: string | null | undefined; deadlineStatus: string | null | undefined }): boolean {
+  const procurementTypes = ["procurement_intention", "tender_plan", "pre_bid_notice", "tender_notice"];
+  return !(input.deadlineStatus === "passed" && procurementTypes.includes(input.itemType ?? ""));
+}
+
 /**
  * Item detail page (and its Markdown export): every unwithdrawn item from an editorial source has one,
  * with or without a Chinese summary (noindex unless indexable). hot_signal material is heat evidence

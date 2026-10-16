@@ -3,7 +3,7 @@ import { withSubject } from "@aihot/industry/site";
 import { FEATURES } from "@aihot/industry/features";
 import type { ReactNode } from "react";
 import {
-  IconApps, IconBolt, IconBookmark, IconChart, IconCheck, IconClock, IconDoc, IconFlame, IconGrid, IconHeart, IconHistory, IconList, IconMessage, IconPlug,
+  IconApps, IconBolt, IconBookmark, IconChart, IconCheck, IconClock, IconDoc, IconFlame, IconGrid, IconHistory, IconList, IconMessage,
 } from "../icons";
 import type { StageKey } from "@aihot/contracts/taxonomy";
 
@@ -23,17 +23,27 @@ export const HOME_STAGE_NAV: Array<{ key: StageKey; label: string; icon: NavItem
   { key: "award", label: "中标信息", icon: IconCheck },
 ];
 
-export const SIDEBAR: Array<{ title: string; items: NavItem[] }> = [
+export const SIDEBAR: Array<{ title: string; items: NavItem[]; featuredStages?: boolean }> = [
   {
-    title: "内容",
+    title: "商机",
+    featuredStages: true,
     items: [
       { to: "/", label: "精选", icon: IconBolt, end: true },
       { to: "/all", label: `全部${withSubject("动态")}`, icon: IconList },
-      { to: "/hot", label: "热点榜", icon: IconFlame },
       { to: "/daily", label: withSubject("日报"), icon: IconDoc },
-      { to: "/topics", label: "主题", icon: IconGrid },
       { to: "/starred", label: "收藏", icon: IconBookmark },
     ],
+  },
+  {
+    title: "行业资讯",
+    items: [
+      { to: "/industry", label: "行业动态", icon: IconBolt },
+      { to: "/hot", label: "热点榜", icon: IconFlame },
+    ],
+  },
+  {
+    title: "专题",
+    items: [{ to: "/topics", label: "主题", icon: IconGrid }],
   },
   // The optional AI-only modules (industry/features.ts).
   ...(FEATURES.leaderboard || FEATURES.codexResetMonitor
@@ -49,12 +59,7 @@ export const SIDEBAR: Array<{ title: string; items: NavItem[] }> = [
     : []),
   {
     title: "更多",
-    items: [
-      { to: "/agent", label: "Agent 接入", icon: IconPlug },
-      { to: "/about", label: "关于", icon: IconHeart },
-      { to: "/changelog", label: "更新日志", icon: IconHistory, changelog: true },
-      { to: "/feedback", label: "反馈", icon: IconMessage },
-    ],
+    items: [{ to: "/feedback", label: "反馈", icon: IconMessage }],
   },
 ];
 
@@ -66,7 +71,7 @@ export const TABBAR: NavItem[] = [
 ];
 
 /** Pages reached from the mobile "更多" tab keep that tab highlighted. */
-export const MORE_PATHS = ["/more", "/hot", "/topics", "/starred", "/leaderboard", "/codex-reset", "/agent", "/about", "/changelog", "/feedback", "/terms", "/privacy"];
+export const MORE_PATHS = ["/more", "/hot", "/topics", "/starred", "/industry", "/leaderboard", "/codex-reset", "/feedback", "/terms", "/privacy"];
 
 export function tabIsActive(item: NavItem, pathname: string): boolean {
   if (item.end) return pathname === item.to;

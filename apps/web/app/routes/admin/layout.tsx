@@ -54,6 +54,8 @@ const NAV: Array<{ group: string; items: Array<{ to: string; label: string; coun
     items: [
       { to: "/admin/sources", label: "信源", count: "sources", tone: "bad", icon: IconPlug },
       { to: "/admin/business", label: "业务匹配", icon: IconGrid },
+      { to: "/admin/review", label: "AI 人工复核", icon: IconDoc },
+      { to: "/admin/scoring", label: "评分规则", icon: IconChart },
     ],
   },
   {

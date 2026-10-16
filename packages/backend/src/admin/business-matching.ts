@@ -6,7 +6,7 @@ import { z } from "zod";
 import { sql } from "../db.ts";
 import { sha256, stableJson } from "../lib/ids.ts";
 import { audit } from "./auth.ts";
-import { BUSINESS_PROFILE, businessProfileVersion } from "../editorial/business.ts";
+import { BUSINESS_PROFILE, businessProfileVersion, invalidateBusinessProfileCache } from "../editorial/business.ts";
 import { enqueue, QUEUES } from "../jobs/queue.ts";
 
 const DRAFT_KEY = "business_profile.draft";
@@ -18,6 +18,7 @@ const Examples = z.array(z.string().trim().min(1).max(500)).max(40);
 export const CapabilitySchema = z.object({
   id: z.string().regex(/^[a-z][a-z0-9-]{1,63}$/),
   name: z.string().trim().min(1).max(100),
+  businessCategory: z.enum(["software", "archives", "modeling", "surveying"]).default("software"),
   enabled: z.boolean().default(true),
   priority: z.enum(["重点", "常规", "观察"]),
   description: z.string().trim().min(1).max(2000),
@@ -27,6 +28,7 @@ export const CapabilitySchema = z.object({
   contextTerms: Terms.default([]),
   positiveExamples: Examples.default([]),
   negativeExamples: Examples.default([]),
+  negativeKeywords: Terms.default([]),
   boundaries: z.array(z.string().trim().min(1).max(500)).max(40).default([]),
 });
 
@@ -87,10 +89,11 @@ function seedAdminProfile(): BusinessProfile {
   return {
     schemaVersion: String(BUSINESS_PROFILE.schemaVersion),
     capabilities: BUSINESS_PROFILE.capabilities.map((c) => ({
-      id: c.id, name: c.name, enabled: c.enabled, priority: level[c.level] ?? "常规", description: c.description,
+      id: c.id, name: c.name, businessCategory: c.businessCategory, enabled: c.enabled, priority: level[c.level] ?? "常规", description: c.description,
       serviceTerms: c.semanticRoles.serviceActions, methodTerms: c.semanticRoles.methods,
       deliverableTerms: c.semanticRoles.deliverables, contextTerms: c.semanticRoles.objects,
       positiveExamples: c.positiveExamples, negativeExamples: c.negativeExamples,
+      negativeKeywords: c.reviewNegativeTerms.length ? c.reviewNegativeTerms : c.negativeExamples,
       boundaries: [...c.boundaries.include, ...c.boundaries.exclude, ...c.boundaries.qualificationUnknown],
     })),
     contexts: BUSINESS_PROFILE.contexts,
@@ -170,6 +173,7 @@ export async function publishBusinessProfile(input: { versionId?: string; expect
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`;
   });
   await audit(actor, "business.profile.publish", `business-profile:${versionId}`, input.reason, current, { versionId, revision: draft.revision });
+  invalidateBusinessProfileCache();
   return { versionId, revision: draft.revision };
 }
 
@@ -185,6 +189,7 @@ export async function rollbackBusinessProfile(versionId: string, reason: string,
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`;
   });
   await audit(actor, "business.profile.rollback", `business-profile:${versionId}`, reason, current, { versionId });
+  invalidateBusinessProfileCache();
   return { versionId };
 }
 
@@ -194,13 +199,13 @@ export async function createBusinessMatchingTest(input: unknown, actor: string) 
   const testId = id("bmt");
   await sql`INSERT INTO business_matching_tests (id, profile_version_id, title, body, source_url, created_by)
     VALUES (${testId}, ${parsed.profileVersionId}, ${parsed.title}, ${parsed.body}, ${parsed.sourceUrl ?? null}, ${actor})`;
+  await audit(actor, "business.matching.test", `business-test:${testId}`, null, null, { profileVersionId: parsed.profileVersionId });
   try {
     await enqueue(QUEUES.businessMatching, { testId }, { singletonKey: testId });
   } catch (error) {
     await sql`UPDATE business_matching_tests SET status = 'failed', error = ${String(error instanceof Error ? error.message : error).slice(0, 4000)}, updated_at = now() WHERE id = ${testId}`;
     throw error;
   }
-  await audit(actor, "business.matching.test", `business-test:${testId}`, null, null, { profileVersionId: parsed.profileVersionId });
   return { id: testId, status: "queued", profileVersionId: parsed.profileVersionId };
 }
 
@@ -225,6 +230,15 @@ export async function saveBusinessMatchingFeedback(input: unknown, actor: string
     const [test] = await sql<{ result: unknown }[]>`SELECT result FROM business_matching_tests WHERE id = ${parsed.testId}`;
     if (!test) return null;
     originalResult = test.result;
+  }
+  if (parsed.articleId) {
+    const [article] = await sql<{ id: string; title: string; relevance: string | null; score: number | null; selected: boolean | null; output: unknown }[]>`
+      SELECT a.id, a.title, an.relevance, an.score, an.selected, an.output
+      FROM articles a LEFT JOIN LATERAL (
+        SELECT relevance, score, selected, output FROM analyses WHERE article_id = a.id ORDER BY id DESC LIMIT 1
+      ) an ON true WHERE a.id = ${parsed.articleId}`;
+    if (!article) return null;
+    originalResult = { title: article.title, relevance: article.relevance, score: article.score, selected: article.selected, output: article.output };
   }
   const [row] = await sql`
     INSERT INTO business_matching_feedback (test_id, article_id, case_id, label, capability_ids, participation, evidence_quality, note, original_result, created_by)

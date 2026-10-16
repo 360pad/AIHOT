@@ -31,7 +31,7 @@ export default function SelectBench({ loaderData }: Route.ComponentProps) {
   const { run, pending } = useAdminAction();
   const file = useRef<HTMLInputElement>(null);
   return (
-    <AdminPage
+    <AdminPage wide
       title="SelectBench"
       subtitle="精选判断的模型对比：同一批人工金标样本，逐条比较各模型的入选决定。运行由 scripts/eval-selection.ts 产生并自动导入；也可以上传报告文件。"
       actions={

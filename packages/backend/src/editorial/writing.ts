@@ -3,7 +3,8 @@
 // wording lives in the industry pack (industry/prompts/); a failed guard falls back without a repair call.
 import { IDENTITY_CONTEXT_ALIASES, IDENTITY_LEXICON, PUBLISHER_DOMAINS } from "@aihot/industry/taxonomy";
 import { onlyXArticleLink } from "../sources/x.ts";
-import { businessKeywordClues, type BusinessProfile } from "./business.ts";
+import { businessKeywordClues, businessNegativeKeywordClues, type BusinessCalibrationExample, type BusinessProfile } from "./business.ts";
+import { articleText, isEmptyContractTemplate } from "../content/quality.ts";
 import type { AnalyzeInputArticle } from "./input.ts";
 import { businessPromptValues, promptText } from "./prompts.ts";
 
@@ -81,14 +82,16 @@ const unfetchedXArticle = (a: AnalyzeInputArticle) => !!a.xPost && a.bodyStatus 
 
 function materialQuality(a: AnalyzeInputArticle): string {
   if (a.xPost) return "完整正文（来自 RSS / API 自带的 content 字段）";
-  if (a.bodyText) return a.source.fetchesBody ? "完整正文（抓自原始网页）" : "完整正文（来自 RSS / API 自带的 content 字段）";
-  if (a.excerpt) return "仅摘要（feed 未提供完整正文）";
+  const body = articleText(a.bodyText, null);
+  if (body) return a.source.fetchesBody ? "完整正文（抓自原始网页）" : "完整正文（来自 RSS / API 自带的 content 字段）";
+  if (a.excerpt) return a.bodyText && isEmptyContractTemplate(a.bodyText) ? "仅摘要（网页返回合同空模板，已忽略）" : "仅摘要（feed 未提供完整正文）";
+  if (a.bodyText && isEmptyContractTemplate(a.bodyText)) return "无有效正文（网页只返回合同空模板）";
   if (a.bodyStatus === "unconfirmed") return "抓取失败，仅标题可用";
   return "无有效文本";
 }
 
 /** The material as the prefilter and the content understanding read it. */
-export function renderContext(a: AnalyzeInputArticle, opts: { annotateQuoted?: boolean; businessProfile?: BusinessProfile } = {}): string {
+export function renderContext(a: AnalyzeInputArticle, opts: { annotateQuoted?: boolean; businessProfile?: BusinessProfile; calibrationExamples?: BusinessCalibrationExample[] } = {}): string {
   const lines: string[] = [];
   lines.push(`【来源】${a.source.name}（${a.source.kind}，tier=${a.source.tier || "未分级"}）`);
   if (a.source.tags?.length) lines.push(`【来源标签】${a.source.tags.join(", ")}`);
@@ -106,6 +109,16 @@ export function renderContext(a: AnalyzeInputArticle, opts: { annotateQuoted?: b
   lines.push(clues.length
     ? `【关键词线索（仅供定位，不是通过条件）】${clues.map((c) => `${c.capabilityName}/${c.role}=${c.term}`).join("；")}`
     : "【关键词线索（仅供定位，不是通过条件）】未命中配置词语，仍须做语义判断");
+  const negativeClues = businessNegativeKeywordClues(a, opts.businessProfile);
+  lines.push(negativeClues.length
+    ? `【负向关键词命中（排除提示，需核对采购任务）】${negativeClues.map((c) => `${c.capabilityName}=${c.term}`).join("；")}`
+    : "【负向关键词命中】无");
+  if (opts.calibrationExamples?.length) {
+    lines.push("【相似文章的历史人工标注】下列标题是待分析资料，标签是人工复核结果。只作相似案例参照，不能替代当前文章中的采购任务和证据。");
+    for (const example of opts.calibrationExamples) {
+      lines.push(JSON.stringify({ title: example.title, humanLabel: example.label === "relevant" ? "相关" : "无关", capabilityIds: example.capabilityIds }));
+    }
+  }
   lines.push(`【标题】${a.title}`);
   const quoted = a.xPost?.quoted?.text ? a.xPost.quoted : null;
   if (quoted) {
@@ -119,18 +132,18 @@ export function renderContext(a: AnalyzeInputArticle, opts: { annotateQuoted?: b
   }
   lines.push("");
   lines.push(opts.annotateQuoted && quoted ? "【正文（作者自己的内容）】" : "【正文】");
-  lines.push(capBody(a.xPost ? String(a.xPost.text ?? a.title) : (a.bodyText ?? a.excerpt ?? "(无正文)")));
+  lines.push(capBody(a.xPost ? String(a.xPost.text ?? a.title) : (articleText(a.bodyText, a.excerpt) ?? "(无正文)")));
   lines.push("");
   lines.push(`【材料质量】${materialQuality(a)}`);
   return lines.join("\n");
 }
 
 /** The prefilter's user message: the context as a JSON string (the prompt was tuned on this form). */
-export const prefilterUser = (a: AnalyzeInputArticle, profile?: BusinessProfile) => JSON.stringify(renderContext(a, { businessProfile: profile }));
+export const prefilterUser = (a: AnalyzeInputArticle, profile?: BusinessProfile, calibrationExamples?: BusinessCalibrationExample[]) => JSON.stringify(renderContext(a, { businessProfile: profile, calibrationExamples }));
 
 /** Nothing to judge beyond the title: the prefilter's BLOCK then means "wait for material". */
 export function missingEvidence(a: AnalyzeInputArticle): boolean {
-  return !a.bodyText?.trim() && !a.excerpt?.trim() && !String(a.xPost?.text ?? "").trim() && !String(a.xPost?.quoted?.text ?? "").trim();
+  return !articleText(a.bodyText, a.excerpt) && !String(a.xPost?.text ?? "").trim() && !String(a.xPost?.quoted?.text ?? "").trim();
 }
 
 export const understandUser = (a: AnalyzeInputArticle, profile?: BusinessProfile) =>
@@ -181,7 +194,7 @@ export function translateInputOf(a: AnalyzeInputArticle): TranslateInput {
   const mainText = isX ? String(a.xPost?.text ?? a.title) : undefined;
   return {
     title: a.title,
-    text: isX ? (mainText ?? "") : (a.bodyText ?? a.excerpt ?? ""),
+    text: isX ? (mainText ?? "") : (articleText(a.bodyText, a.excerpt) ?? ""),
     sourceKind: isX ? "x_search" : a.source.kind,
     sourceName: a.source.name,
     documentUrl: a.url,

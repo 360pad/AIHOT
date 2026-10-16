@@ -9,8 +9,26 @@ import { sql } from "../db.ts";
 import { sha256 } from "../lib/ids.ts";
 import { loadContact, type ContactSettings } from "../site/contact.ts";
 import { audit } from "./auth.ts";
+import { COLLECTION_SCHEDULE_KEY, DEFAULT_COLLECTION_TIMES, normalizeCollectionTimes, scheduleOf, type CollectionSchedule } from "../sources/schedule.ts";
 
 const MAX_QR_BYTES = 2 * 1024 * 1024;
+
+export async function getCollectionSchedule(): Promise<CollectionSchedule> {
+  const [row] = await sql<{ value: unknown }[]>`SELECT value FROM settings WHERE key = ${COLLECTION_SCHEDULE_KEY}`;
+  return scheduleOf(row?.value ?? { times: DEFAULT_COLLECTION_TIMES });
+}
+
+export async function updateCollectionSchedule(input: { times: unknown; reason: string }, actor: string) {
+  if (!input.reason?.trim()) throw new Error("reason is required");
+  const times = normalizeCollectionTimes(input.times);
+  const before = await getCollectionSchedule();
+  const after = { times, timezone: "Asia/Shanghai" as const };
+  await sql`
+    INSERT INTO settings (key, value, updated_by) VALUES (${COLLECTION_SCHEDULE_KEY}, ${sql.json(after)}, ${actor})
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`;
+  await audit(actor, "settings.collection_schedule", `settings:${COLLECTION_SCHEDULE_KEY}`, input.reason, before, after);
+  return after;
+}
 
 export async function replaceContactQr(input: { slot: keyof ContactSettings; data: Buffer }, actor: string) {
   if (input.slot !== "wechatQr" && input.slot !== "feishuQr") throw new Error("unknown slot");

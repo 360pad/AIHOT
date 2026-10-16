@@ -34,12 +34,14 @@ const GROUPS = [
 export default function TopicsPage() {
   const { topics } = useLoaderData<typeof loader>();
   return (
-    <div className="pb-10">
-      <header className="pb-2 pt-5 lg:pt-1">
-        <h1 className="text-[24px] font-semibold leading-[1.3] text-ink">按主题看 AI</h1>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-ink-3">
-          按公司与模型、技术方向、内容形态浏览 <span className="num">{topics.length}</span> 个主题，持续汇集近期焦点与精选。
-        </p>
+    <div className="radar-page radar-page-topics pb-10">
+      <header className="radar-page-heading pb-2 pt-5 lg:pt-1">
+        <div>
+          <h1 className="radar-page-title">按主题看 AI</h1>
+          <p className="radar-page-subtitle">
+            按公司与模型、技术方向、内容形态浏览 <span className="num">{topics.length}</span> 个主题，持续汇集近期焦点与精选。
+          </p>
+        </div>
       </header>
       {GROUPS.map((g) => (
         <section key={g.key} aria-labelledby={`topics-${g.key}`} className="pt-8">

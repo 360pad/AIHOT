@@ -10,10 +10,12 @@ import { after, before, test } from "node:test";
 import { closeDb, sql } from "@aihot/backend/db";
 import { upsertMaterial } from "@aihot/backend/content/materials";
 import { analyzeArticle, SCORE_SYSTEM, tierThreshold } from "@aihot/backend/editorial/analyze";
-import { queueProcessing } from "@aihot/backend/jobs/content";
+import { processArticle, queueProcessing } from "@aihot/backend/jobs/content";
 import { QUEUES, stopBoss } from "@aihot/backend/jobs/queue";
 import { compactAnswerFirstSummary, enforceIdentity, parseTranslateOutput, PREFILTER_SYSTEM } from "@aihot/backend/editorial/writing";
+import { businessKeywordClues } from "@aihot/backend/editorial/business";
 import { promptText } from "@aihot/backend/editorial/prompts";
+import { weightedScore } from "@aihot/backend/editorial/scoring-policy";
 import { SITE } from "@aihot/industry/site";
 
 const T = tag();
@@ -23,11 +25,18 @@ const X_SOURCE = `test-analyze-x-${T}`;
 type Step = "prefilter" | "score" | "understand" | "summarize" | "structure";
 interface Req { step: Step; marker: string; system: string; user: string; body: Record<string, any> }
 const requests: Req[] = [];
-const MARKERS = ["CLEAR", "RESCUE", "LOW", "OFFTOPIC", "BARE", "VAGUE", "THIN", "SENSITIVE", "推文"];
-const scoreAnswers: Record<string, number[]> = { CLEAR: [78, 72], RESCUE: [56, 50], LOW: [45, 40], THIN: [70, 70], SENSITIVE: [80, 80], 推文: [40, 40], BARE: [30, 34], VAGUE: [60, 62] };
+const MARKERS = ["CLEAR", "RESCUE", "LOW", "OFFTOPIC", "BARE", "VAGUE", "THIN", "SENSITIVE", "DUE", "EXPIRED", "SEMANTIC", "推文"];
+const scoreAnswers: Record<string, number[]> = { CLEAR: [78, 72], RESCUE: [56, 50], LOW: [45, 40], THIN: [70, 70], SENSITIVE: [80, 80], 推文: [40, 40], BARE: [30, 34], VAGUE: [60, 62], DUE: [90, 90], EXPIRED: [90, 90], SEMANTIC: [70, 70] };
+const scoreAnswer = (requested: number, deadlineStatus: "open" | "due_soon" | "passed" = "open") => {
+  const target = Math.max(0, Math.min(100, Math.round(requested / 2) * 2));
+  for (let fit = 0; fit <= 10; fit++) for (let region = 0; region <= 10; region++) for (let deadline = 0; deadline <= 10; deadline++) {
+    if (weightedScore({ fit, region, deadline }, { fit: 60, region: 25, deadline: 15 }) === target) return { dimensions: Object.fromEntries(Object.entries({ fit, region, deadline }).map(([key, score]) => [key, { score, reason: `材料支持的${key}评分` }])), deadlineStatus };
+  }
+  throw new Error(`Cannot represent score ${target}`);
+};
 
 const stepOf = (system: string, user: string): Step =>
-  system.includes("项目机会评分器") ? "score" : system.includes("相关性预筛") ? "prefilter"
+  system.includes("优先级评分器") ? "score" : system.includes("相关性预筛") ? "prefilter"
   : system.includes("项目情报编辑") ? "understand" : system.includes("资料结构化助手") ? "structure"
   : user.includes("title_zh") ? "summarize" : (() => { throw new Error("unknown request"); })();
 
@@ -41,8 +50,28 @@ const provider = await stub((_hit, req) => {
   const marker = MARKERS.find((m) => user.includes(m)) ?? "";
   requests.push({ step, marker, system, user, body });
   const answer = (content: unknown) => ({ id: `stub-${requests.length}`, model: "stub", choices: [{ message: { content: typeof content === "string" ? content : JSON.stringify(content) } }], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } });
-  if (step === "prefilter") return answer({ label: marker === "OFFTOPIC" || marker === "BARE" ? "BLOCK" : marker === "VAGUE" ? "UNKNOWN" : "PASS", reason: "测试" });
-  if (step === "score") return answer({ attentionScore: scoreAnswers[marker]!.shift() });
+  if (step === "prefilter" && marker === "SEMANTIC") return answer({
+    label: "PASS", reason: "公告表达与三维建模能力语义相符。",
+    materialCoverage: { status: "partial", sectionsRead: ["标题"], missing: ["采购需求正文"], notes: "标题已明确本次任务。" },
+    projects: [{ id: "p1", name: "隐式地质曲面重建与成果入库采购", number: null, lots: [], evidenceIds: ["e1"], tasks: [{
+      id: "p1-t1", name: "隐式地质曲面重建与成果入库", lot: null, action: "重建并入库", object: "地质曲面", methods: [], deliverables: ["成果数据"],
+      purchaseRole: "principal", participation: "standalone", evidenceIds: ["e1"], matches: [{ capabilityId: "three-dimensional-modeling", relation: "direct", rationale: "属于三维地质建模成果。", evidenceIds: ["e1"] }],
+    }] }], contexts: ["mining"], organizations: [],
+    evidence: [{ id: "e1", quote: "隐式地质曲面重建与成果入库", source: "title", location: null, strength: "explicit" }], missingInformation: ["采购需求正文"],
+  });
+  if (step === "prefilter") {
+    const label = marker === "OFFTOPIC" || marker === "BARE" ? "BLOCK" : marker === "VAGUE" ? "UNKNOWN" : "PASS";
+    return answer({
+      label, reason: "测试",
+      materialCoverage: { status: "partial", sectionsRead: ["标题"], missing: [], notes: "" },
+      projects: label === "PASS" ? [{ id: "p1", name: "测试采购任务", number: null, lots: [], evidenceIds: ["e1"], tasks: [{
+        id: "p1-t1", name: "模型技术采购", lot: null, action: "采购", object: "模型技术", methods: [], deliverables: [],
+        purchaseRole: "principal", participation: "standalone", evidenceIds: ["e1"], matches: [{ capabilityId: "three-dimensional-modeling", relation: "direct", rationale: "stub", evidenceIds: ["e1"] }],
+      }] }] : [],
+      evidence: label === "PASS" ? [{ id: "e1", quote: "model release", source: "title", location: null, strength: "explicit" }] : [],
+    });
+  }
+  if (step === "score") return answer(scoreAnswer(scoreAnswers[marker]!.shift()!, marker === "DUE" ? "due_soon" : marker === "EXPIRED" ? "passed" : "open"));
   if (step === "understand") {
     if (marker === "SENSITIVE") return new Reply(400, { contentFilter: [{ level: 1, role: "user" }], error: { code: "1301", message: "系统检测到输入或生成内容可能包含不安全或敏感内容" } });
     return answer({ itemType: "tender_notice", authorRole: "principal", tags: ["城市治理与数字政府", "招标公告", "不存在的标签"], editorialJudgment: `理由 ${marker}`, titleZh: `理解标题 ${marker}`, summaryZh: `理解摘要 ${marker}。第二句补充一个关键数字。` });
@@ -96,6 +125,10 @@ test("a selected item: prefilter, two scores, the content understanding and the 
   const id = await article("CLEAR");
   const res = await analyzeArticle(id);
   assert.deepEqual([res!.output!.selected, res!.output!.score], [true, 75], "78 + 72 = 150 >= 120");
+  assert.deepEqual(res!.output!.scores, [78, 72]);
+  assert.equal(res!.output!.scoreDetails?.length, 2, "each independent score keeps its three axis reasons");
+  assert.ok(res!.output!.scoreDetails?.every((detail) => detail.fit.reason.includes("材料支持")));
+  assert.deepEqual(res!.output!.scoreWeights, { fit: 60, region: 25, deadline: 15 });
   assert.deepEqual(calls("CLEAR").sort(), ["prefilter", "score", "score", "structure", "understand"]);
   const r = await row(id);
   assert.deepEqual([r.title_zh, r.reason_zh, r.category, r.receipt_ids.length], ["理解标题 CLEAR", "理由 CLEAR", "digital-government", 5]);
@@ -125,10 +158,20 @@ test("a near-selected item is written like a selected one; below the floor it is
   assert.deepEqual((await row(lowId)).tags, ["城市治理与数字政府", "招标公告"], "structure tags");
 });
 
-test("the prefilter's BLOCK stops everything; UNKNOWN remains pending", async () => {
-  const off = await analyzeArticle(await article("OFFTOPIC"));
-  assert.deepEqual([off!.output!.relevance, off!.output!.selected], ["block", false]);
+test("BLOCK leaves no article or AI result behind; UNKNOWN remains pending", async () => {
+  const offId = await article("OFFTOPIC");
+  const off = await analyzeArticle(offId);
+  assert.deepEqual([off!.analysisId, off!.output!.relevance, off!.output!.selected], [null, "block", false]);
   assert.deepEqual(calls("OFFTOPIC"), ["prefilter"]);
+  assert.equal((await sql`SELECT id FROM articles WHERE id = ${offId}`).length, 0);
+  assert.equal((await sql`SELECT id FROM analyses WHERE article_id = ${offId}`).length, 0);
+  const [receipt] = await sql<{ subject: string | null; request: unknown; response: unknown; status: string }[]>`SELECT subject, request, response, status FROM receipts WHERE id = ${off!.receiptIds[0]}`;
+  assert.deepEqual(receipt, { subject: null, request: null, response: null, status: "completed" });
+  const [attempt] = await sql<{ total_tokens: number }[]>`SELECT (usage->>'total_tokens')::int AS total_tokens FROM receipt_attempts WHERE receipt_id = ${off!.receiptIds[0]}`;
+  assert.equal(attempt?.total_tokens, 15, "request usage remains available for cost accounting");
+  const queuedId = await article("OFFTOPIC-QUEUE");
+  assert.deepEqual(await processArticle(queuedId), { state: "discarded" });
+  assert.equal((await sql`SELECT id FROM articles WHERE id = ${queuedId}`).length, 0);
   // An UNKNOWN with material can still be scored and written for diagnosis, but never becomes public relevance PASS.
   const vagueId = await article("VAGUE");
   const vague = await analyzeArticle(vagueId);
@@ -139,6 +182,24 @@ test("the prefilter's BLOCK stops everything; UNKNOWN remains pending", async ()
   const bare = await analyzeArticle(await article("BARE", { bodyText: null, excerpt: null, bodyStatus: "none" }));
   assert.deepEqual([bare!.output!.relevance, bare!.output!.selected, bare!.output!.score], ["unknown", false, 32]);
   assert.deepEqual(calls("BARE").sort(), ["prefilter", "score", "score", "structure"]);
+});
+
+test("semantic task evidence can PASS without any literal keyword clue", async () => {
+  const title = "隐式地质曲面重建与成果入库采购";
+  const id = await article("SEMANTIC", { title });
+  assert.deepEqual(businessKeywordClues({ title, bodyText: "", excerpt: null }), []);
+  const result = await analyzeArticle(id);
+  assert.equal(result!.output!.relevance, "pass");
+  assert.equal(result!.output!.businessMatch.evidence[0]?.verified, true);
+  const request = requests.find((item) => item.marker === "SEMANTIC" && item.step === "prefilter")!;
+  assert.match(request.user, /未命中配置词语，仍须做语义判断/);
+});
+
+test("near-deadline and passed opportunities cannot enter 精选, while their business relevance remains visible", async () => {
+  const due = await analyzeArticle(await article("DUE"));
+  assert.deepEqual([due!.output!.relevance, due!.output!.deadlineStatus, due!.output!.selected], ["pass", "due_soon", false]);
+  const expired = await analyzeArticle(await article("EXPIRED"));
+  assert.deepEqual([expired!.output!.relevance, expired!.output!.deadlineStatus, expired!.output!.selected], ["pass", "passed", false]);
 });
 
 test("a feed summary alone: the article page is fetched first, then the whole article is judged", async () => {

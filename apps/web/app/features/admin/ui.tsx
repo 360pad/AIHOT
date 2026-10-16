@@ -5,9 +5,9 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
 import { ago, bj } from "./format";
 
-export function AdminPage({ title, subtitle, actions, children, className = "" }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
+export function AdminPage({ title, subtitle, actions, children, className = "", wide = false }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; wide?: boolean }) {
   return (
-    <div className={`mx-auto w-full max-w-[1320px] px-4 pb-24 pt-6 sm:px-6 lg:px-8 lg:pt-8 ${className}`}>
+    <div className={`mx-auto w-full ${wide ? "max-w-none px-4 sm:px-6 xl:px-10 2xl:px-14" : "max-w-[1320px] px-4 sm:px-6 lg:px-8"} pb-24 pt-6 lg:pt-8 ${className}`}>
       <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-[22px] font-semibold tracking-tight text-ink sm:text-[24px]">{title}</h1>
@@ -37,7 +37,7 @@ export function Card({ title, right, children, className = "", pad = true }: { t
 export function Stat({ label, value, hint, tone }: { label: ReactNode; value: ReactNode; hint?: ReactNode; tone?: "ok" | "warn" | "bad" }) {
   const color = tone === "bad" ? "text-hot" : tone === "warn" ? "text-amber" : tone === "ok" ? "text-ok" : "text-ink";
   return (
-    <div className="rounded-panel bg-surface px-4 py-3.5 ring-1 ring-line">
+    <div className="min-w-0 rounded-panel bg-surface px-4 py-3.5 ring-1 ring-line">
       <div className="text-[12.5px] text-ink-3">{label}</div>
       <div className={`num mt-1 text-[22px] font-semibold tracking-tight ${color}`}>{value}</div>
       {hint && <div className="mt-0.5 text-[12px] text-ink-4">{hint}</div>}

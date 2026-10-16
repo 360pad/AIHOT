@@ -227,8 +227,8 @@ export default function HotPage() {
   const runners = rest.slice(0, 2);
   const others = rest.slice(2);
   return (
-    <div className="pb-10">
-      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 pb-5 pt-5 lg:pt-1">
+    <div className="radar-page radar-page-hot pb-10">
+      <header className="radar-page-heading flex-wrap items-end pb-5 pt-5 lg:pt-1">
         <div>
           <div className="flex items-center gap-2 text-[12px] font-semibold tracking-[0.08em] text-hot">
             <span className="relative flex size-2" aria-hidden="true">
@@ -237,8 +237,8 @@ export default function HotPage() {
             </span>
             实时热度
           </div>
-          <h1 className="mt-1.5 text-[24px] font-bold leading-[1.3] tracking-[-0.01em] text-ink lg:text-[26px]">{withSubject("热点榜")}</h1>
-          <p className="mt-1.5 text-[13.5px] text-ink-3">过去 {hot.windowHours} 小时，AI 圈讨论最多的 {hot.entries.length || 10} 件事</p>
+          <h1 className="radar-page-title mt-1.5">{withSubject("热点榜")}</h1>
+          <p className="radar-page-subtitle">过去 {hot.windowHours} 小时，AI 圈讨论最多的 {hot.entries.length || 10} 件事</p>
         </div>
         {hot.computedAt && (
           <p className="text-[12px] text-ink-4">

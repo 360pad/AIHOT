@@ -15,12 +15,17 @@ export async function adminGet<T>(request: Request, path: string): Promise<T> {
   if (res.status === 404) throw data({ message: "not_found" }, { status: 404 });
   if (!res.ok) {
     let detail = `api ${res.status}`;
+    let requestId: string | undefined;
+    let code: string | undefined;
     try {
-      detail = ((await res.json()) as { detail?: string }).detail ?? detail;
+      const problem = (await res.json()) as { detail?: string; requestId?: string; code?: string };
+      detail = problem.detail ?? detail;
+      requestId = problem.requestId;
+      code = problem.code;
     } catch {
       // not JSON
     }
-    throw data({ message: detail }, { status: res.status >= 500 ? 503 : res.status });
+    throw data({ message: detail, code, requestId, apiStatus: res.status }, { status: res.status >= 500 ? 503 : res.status });
   }
   return (await res.json()) as T;
 }

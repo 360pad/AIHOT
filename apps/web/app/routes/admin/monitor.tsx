@@ -304,7 +304,7 @@ export default function MonitorAdmin({ loaderData }: Route.ComponentProps) {
   const [sp] = useSearchParams();
   const tab = loaderData.tab;
   return (
-    <AdminPage
+    <AdminPage wide
       title="Codex 重置"
       subtitle="修正识别结果：事件类型、状态、时间与适用对象；没有“已完成”帖子时用回执核对确认；识别错的事件撤回；帖子挂错可以移动。"
       actions={<a className="text-[13px] text-accent" href="/codex-reset" target="_blank" rel="noreferrer">打开公开页</a>}

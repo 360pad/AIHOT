@@ -204,6 +204,15 @@ async function fetchJsonPage(source: SourceRow, page: number): Promise<JsonPage>
       throw new FetchError("response is not JSON");
     }
   }
+  if (c.jsonTextPath) {
+    const nested = getPath(data, String(c.jsonTextPath));
+    if (typeof nested !== "string") throw new FetchError("jsonTextPath did not resolve to a string");
+    try {
+      data = JSON.parse(nested);
+    } catch {
+      throw new FetchError("jsonTextPath is not valid JSON");
+    }
+  }
   if (c.mode === "html_json") {
     const html = getPath(data, String(c.htmlPath ?? "data.html"));
     if (typeof html !== "string") throw new FetchError("htmlPath did not resolve to a string");

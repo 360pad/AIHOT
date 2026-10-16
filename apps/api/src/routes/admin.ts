@@ -6,14 +6,16 @@ import { actorOf } from "@aihot/backend/admin/auth";
 
 import { annotateSelectBenchCase, importSelectBenchRun, listSelectBenchRuns, selectBenchRun } from "@aihot/backend/admin/selectbench";
 import { businessMatchingTest, businessProfile, createBusinessMatchingTest, listBusinessMatchingTests, publishBusinessProfile, rollbackBusinessProfile, saveBusinessMatchingFeedback, saveBusinessProfileDraft } from "@aihot/backend/admin/business-matching";
+import { listArticleReviews } from "@aihot/backend/admin/review";
+import { getScoringPolicy, updateScoringPolicy } from "@aihot/backend/admin/scoring-policy";
 import { modelsOverview, switchModel } from "@aihot/backend/admin/models";
 
 import { contentChain, detachFromFact, mergeStories, overrideFields, rerun, searchContent, setSeoIndexed, setVisibility } from "@aihot/backend/admin/content";
 import { banSource, eraseFeedback, feedbackScreenshot, listFeedback, unbanSource, updateFeedback } from "@aihot/backend/admin/feedback";
 import { listMonitorEvents, listMonitorPosts, relinkPost, resolveMonitorPost, reviewReceipt, setWithdrawn, updateMonitorEvent } from "@aihot/backend/admin/monitor";
 import { releaseReceipt, requeueFailedArticles, resolveDelivery, runsOverview } from "@aihot/backend/admin/runs";
-import { listBudgets, listTargets, replaceContactQr, setTargetEnabled, updateBudget } from "@aihot/backend/admin/settings";
-import { createSource, fetchNow, listSources, previewSource, sourceDetail, updateSource } from "@aihot/backend/admin/sources";
+import { getCollectionSchedule, listBudgets, listTargets, replaceContactQr, setTargetEnabled, updateBudget, updateCollectionSchedule } from "@aihot/backend/admin/settings";
+import { collectionStatus, createSource, fetchNow, fetchScheduledNow, listSources, previewSource, sourceDetail, updateSource } from "@aihot/backend/admin/sources";
 import { sql } from "@aihot/backend/db";
 import { loadContact } from "@aihot/backend/site/contact";
 import { sendProblem } from "../http/respond.ts";
@@ -51,9 +53,16 @@ export function registerAdmin(app: FastifyInstance) {
     return s ? previewSource(s as never) : notFound(req, reply);
   }));
   app.post("/api/admin/sources/:id/fetch", adminHandler(async (req, reply, admin) => orNotFound(req, reply, await fetchNow(param(req, "id"), actorOf(admin)))));
+  app.post("/api/admin/sources/fetch-scheduled", adminHandler(async (_req, _reply, admin) => fetchScheduledNow(actorOf(admin))));
 
   // Content and events (F19)
   app.get("/api/admin/content", adminHandler(async (req) => ({ rows: await searchContent(q(req).q ?? "") })));
+  app.get("/api/admin/review", adminHandler(async (req) => listArticleReviews({ q: q(req).q, filter: q(req).filter, days: q(req).days === undefined ? 30 : Number(q(req).days), page: page(req) })));
+  app.get("/api/admin/scoring-policy", adminHandler(async () => getScoringPolicy()));
+  app.put("/api/admin/scoring-policy", adminHandler(async (req, _reply, admin) => {
+    const b = body<{ weights: unknown; dueSoonDays?: unknown; reason: string }>(req);
+    return updateScoringPolicy({ weights: b.weights, dueSoonDays: b.dueSoonDays, reason: String(b.reason ?? "") }, actorOf(admin));
+  }));
   app.get("/api/admin/content/:id", adminHandler(async (req, reply) => orNotFound(req, reply, await contentChain(param(req, "id")))));
   app.post("/api/admin/content/:id/visibility", adminHandler(async (req, _reply, admin) => setVisibility(param(req, "id"), body(req) as never, actorOf(admin))));
   app.post("/api/admin/content/:id/seo", adminHandler(async (req, reply, admin) => orNotFound(req, reply, await setSeoIndexed(param(req, "id"), body(req) as never, actorOf(admin)))));
@@ -106,7 +115,11 @@ export function registerAdmin(app: FastifyInstance) {
   app.post("/api/admin/monitor/posts/:id/resolve", adminHandler(async (req, reply, admin) => orNotFound(req, reply, await resolveMonitorPost(param(req, "id"), body(req) as never, actorOf(admin)))));
 
   // Settings
-  app.get("/api/admin/settings", adminHandler(async () => ({ contact: await loadContact(), targets: await listTargets(), budgets: await listBudgets() })));
+  app.get("/api/admin/settings", adminHandler(async () => ({ contact: await loadContact(), targets: await listTargets(), budgets: await listBudgets(), collectionSchedule: await getCollectionSchedule(), collectionStatus: await collectionStatus() })));
+  app.put("/api/admin/collection-schedule", adminHandler(async (req, _reply, admin) => {
+    const b = body<{ times: unknown; reason: string }>(req);
+    return updateCollectionSchedule({ times: b.times, reason: String(b.reason ?? "") }, actorOf(admin));
+  }));
   app.post("/api/admin/settings/contact-qr", adminHandler(async (req, _reply, admin) => {
     const b = body<{ slot: "wechatQr" | "feishuQr"; image: string }>(req);
     return replaceContactQr({ slot: b.slot, data: decodeImage(b.image) }, actorOf(admin));

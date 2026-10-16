@@ -7,9 +7,11 @@ import { bj } from "../../features/admin/format";
 import { AdminPage, Badge, Button, Card, Empty, Field, Input, ReasonDialog, Select, Textarea } from "../../features/admin/ui";
 
 type Priority = "重点" | "常规" | "观察";
+type BusinessCategory = "software" | "archives" | "modeling" | "surveying";
 type Capability = {
   id: string;
   name: string;
+  businessCategory: BusinessCategory;
   enabled: boolean;
   priority: Priority;
   description: string;
@@ -19,6 +21,7 @@ type Capability = {
   contextTerms: string[];
   positiveExamples: string[];
   negativeExamples: string[];
+  negativeKeywords: string[];
   boundaries: string[];
 };
 type Profile = { schemaVersion: string; capabilities: Capability[]; contexts: Array<{ id: string; name: string; description: string }>; notes: string };
@@ -37,9 +40,39 @@ export async function loader({ request }: Route.LoaderArgs) {
 export const meta: Route.MetaFunction = () => [{ title: `业务匹配 · ${SITE.name} 后台` }];
 
 const EMPTY: Profile = { schemaVersion: "1", capabilities: [], contexts: [], notes: "" };
+const BUSINESS_GROUPS: Array<{ id: BusinessCategory; name: string; description: string }> = [
+  { id: "software", name: "软件开发与软件服务", description: "按原行业细分维护软件开发、系统建设、数据应用和运维服务。" },
+  { id: "archives", name: "档案扫描与数字化", description: "档案扫描、整理、数字化加工、质检和归档。" },
+  { id: "modeling", name: "三维建模", description: "三维模型、地质建模、实景三维、BIM 和 CIM 模型服务。" },
+  { id: "surveying", name: "测绘与测量", description: "测绘、工程测量、空间数据采集及测绘成果服务。" },
+];
+
+function categoryForCapability(id: string): BusinessCategory {
+  if (id === "archives-digitization") return "archives";
+  if (id === "three-dimensional-modeling") return "modeling";
+  if (id === "surveying-spatial-data") return "surveying";
+  return "software";
+}
 
 function cloneProfile(profile: Profile): Profile {
-  return JSON.parse(JSON.stringify(profile)) as Profile;
+  const copy = JSON.parse(JSON.stringify(profile)) as Profile;
+  return {
+    ...copy,
+    capabilities: copy.capabilities.map((capability) => ({
+      ...capability,
+      businessCategory: capability.businessCategory ?? categoryForCapability(capability.id),
+      serviceTerms: [...new Set([...(capability.serviceTerms ?? []), ...(capability.deliverableTerms ?? [])])],
+      methodTerms: [],
+      deliverableTerms: [],
+      contextTerms: capability.contextTerms ?? [],
+      positiveExamples: capability.positiveExamples ?? [],
+      negativeExamples: capability.negativeExamples ?? [],
+      negativeKeywords: capability.negativeKeywords ?? [],
+      boundaries: capability.boundaries ?? [],
+    })),
+    contexts: copy.contexts ?? [],
+    notes: copy.notes ?? "",
+  };
 }
 
 function lines(value: string) {
@@ -66,7 +99,7 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
   const [testBody, setTestBody] = useState("");
   const [draftDialog, setDraftDialog] = useState(false);
   const [rollback, setRollback] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState(() => initial.capabilities[0]?.id ?? "contexts");
+  const [activeTab, setActiveTab] = useState<BusinessCategory | "contexts" | "json">(() => initial.capabilities[0]?.businessCategory ?? categoryForCapability(initial.capabilities[0]?.id ?? ""));
   const [copied, setCopied] = useState(false);
   const revision = d.draft?.revision ?? 0;
   const profileVersionId = d.draft?.versionId ?? d.current?.versionId ?? "";
@@ -80,16 +113,16 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
     setProfile((current) => ({ ...current, contexts: current.contexts.map((context, i) => i === index ? { ...context, ...patch } : context) }));
   }
 
-  function addCapability() {
+  function addCapability(category: BusinessCategory) {
     const id = nextCustomCapabilityId(profile.capabilities);
-    const capability: Capability = { id, name: "新业务能力", enabled: false, priority: "常规", description: "请填写这项业务能力的服务范围、交付成果和排除边界。", serviceTerms: [], methodTerms: [], deliverableTerms: [], contextTerms: [], positiveExamples: [], negativeExamples: [], boundaries: [] };
+    const capability: Capability = { id, name: "新业务能力", businessCategory: category, enabled: false, priority: "常规", description: "请填写这项业务的服务范围和排除边界。", serviceTerms: [], methodTerms: [], deliverableTerms: [], contextTerms: [], positiveExamples: [], negativeExamples: [], negativeKeywords: [], boundaries: [] };
     setProfile((current) => ({ ...current, capabilities: [...current.capabilities, capability] }));
-    setActiveTab(id);
+    setActiveTab(category);
   }
 
   function addContext() {
     const id = nextCustomContextId(profile.contexts);
-    const context = { id, name: "新应用场景", description: "请填写该场景的采购方、项目对象或业务环境说明。" };
+    const context = { id, name: "新行业分类", description: "请填写该行业分类的业务背景说明。" };
     setProfile((current) => ({ ...current, contexts: [...current.contexts, context] }));
     setActiveTab("contexts");
   }
@@ -108,7 +141,7 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
     <AdminPage className="max-w-none" title="业务匹配" subtitle="用表单维护企业能力、测试语义判断并留下人工标注。草稿发布后才会成为新分析任务的配置。">
       <Card title="怎么使用" className="mb-5">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <Step number="1" title="编辑能力" text="每行填写一个词或一个例子。行业只是背景，服务动作和交付成果才是主要判断依据。" />
+          <Step number="1" title="编辑业务" text="先选公司能做的业务类别，再维护业务关键词和明确排除项。行业分类只作为背景。" />
           <Step number="2" title="保存草稿" text="先保存，系统会生成一个可回退的版本，不会立即改变正在运行的配置。" />
           <Step number="3" title="提交测试" text="用真实招标标题和正文测试刚保存的草稿，查看模型是否 PASS、BLOCK 或待确认。" />
           <Step number="4" title="测试通过后发布" text="测试结果符合预期后，再发布当前草稿；有问题就继续修改、保存和测试。" />
@@ -124,13 +157,12 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
           <div className="grid items-stretch lg:grid-cols-[224px_minmax(0,1fr)]">
             <aside className="border-b border-line bg-bg-sunk/45 p-2 lg:border-b-0 lg:border-r">
               <nav aria-label="业务配置二级导航">
-                <SubnavSection title="业务能力" hint="公司能提供什么服务">
-                  {profile.capabilities.map((capability) => <SubnavItem key={capability.id} active={activeTab === capability.id} onClick={() => setActiveTab(capability.id)}>{capability.name || "未命名能力"}</SubnavItem>)}
-                  <SubnavAction onClick={addCapability}>＋ 新建业务能力</SubnavAction>
+                <SubnavSection title="业务类别" hint="先选公司能做的业务">
+                  {BUSINESS_GROUPS.map((group) => <SubnavItem key={group.id} active={activeTab === group.id} onClick={() => setActiveTab(group.id)}>{group.name}（{profile.capabilities.filter((capability) => capability.businessCategory === group.id).length}）</SubnavItem>)}
                 </SubnavSection>
-                <SubnavSection title="应用场景" hint="项目发生在哪里、服务谁">
-                  <SubnavItem active={activeTab === "contexts"} onClick={() => setActiveTab("contexts")}>场景配置</SubnavItem>
-                  <SubnavAction onClick={addContext}>＋ 新建应用场景</SubnavAction>
+                <SubnavSection title="行业分类" hint="保留现有行业分类">
+                  <SubnavItem active={activeTab === "contexts"} onClick={() => setActiveTab("contexts")}>行业分类配置</SubnavItem>
+                  <SubnavAction onClick={addContext}>＋ 新增行业分类</SubnavAction>
                 </SubnavSection>
                 <SubnavSection title="查看与验证" hint="核对配置和测试材料">
                   <SubnavItem active={activeTab === "json"} onClick={() => setActiveTab("json")}>JSON 预览</SubnavItem>
@@ -139,9 +171,9 @@ export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
             </aside>
 
             <div className="min-w-0 p-4">
-              <p className="mb-4 text-[13px] leading-relaxed text-ink-3">从左侧选择要维护的业务能力或应用场景，右侧只显示当前编辑内容。业务能力回答“公司能做什么”，应用场景补充“项目发生在哪里、服务谁”。</p>
+                <p className="mb-4 text-[13px] leading-relaxed text-ink-3">公司业务按软件服务、档案数字化、三维建模、测绘测量归类；行业分类保持原样。关键词用于说明能做什么和明确排除什么，AI 评分流程与权重保持不变。</p>
 
-              {activeTab === "json" ? <div className="rounded-card border border-line bg-bg-sunk p-3"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-[14px] font-semibold text-ink">当前表单生成的 JSON</h3><p className="mt-1 text-[12px] text-ink-4">只读预览，保存草稿时提交的就是这份内容。</p></div><Button size="sm" onClick={() => { void copyJson(); }}>{copied ? "已复制" : "复制 JSON"}</Button></div><pre className="max-h-[620px] overflow-auto rounded-control bg-surface p-3 text-[11.5px] leading-relaxed text-ink-2">{json}</pre></div> : activeTab === "contexts" ? <div className="space-y-4"><div><h3 className="text-[14px] font-semibold text-ink">应用场景配置</h3><p className="mt-1 text-[12px] text-ink-4">场景只提供上下文，不是公司的服务能力；例如“水利”和“矿山”都可以使用“测绘”能力。</p></div><div className="space-y-3">{profile.contexts.map((context, index) => <div key={context.id} className="rounded-card border border-line bg-bg-sunk p-3"><div className="grid gap-3 sm:grid-cols-[180px_1fr]"><Field label="场景名称"><Input value={context.name} onChange={(e) => updateContext(index, { name: e.target.value })} /></Field><Field label="场景说明"><Input value={context.description} onChange={(e) => updateContext(index, { description: e.target.value })} /></Field></div><div className="mt-2 font-mono text-[11px] text-ink-4">场景 ID：{context.id}</div></div>)}</div><Field label="给模型的总体说明" hint="补充企业边界、优先关注的公告类型或需要人工复核的情况。"><Textarea className="min-h-[100px]" value={profile.notes} onChange={(e) => setProfile((current) => ({ ...current, notes: e.target.value }))} placeholder="例如：优先关注采购意向、招标公告、方案公示和中标信息；只出现硬件采购时通常不相关。" /></Field></div> : profile.capabilities.map((capability, index) => capability.id === activeTab && <CapabilityEditor key={capability.id} capability={capability} onChange={(patch) => updateCapability(index, patch)} />)}
+              {activeTab === "json" ? <div className="rounded-card border border-line bg-bg-sunk p-3"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-[14px] font-semibold text-ink">当前表单生成的 JSON</h3><p className="mt-1 text-[12px] text-ink-4">只读预览，保存草稿时提交的就是这份内容。</p></div><Button size="sm" onClick={() => { void copyJson(); }}>{copied ? "已复制" : "复制 JSON"}</Button></div><pre className="max-h-[620px] overflow-auto rounded-control bg-surface p-3 text-[11.5px] leading-relaxed text-ink-2">{json}</pre></div> : activeTab === "contexts" ? <div className="space-y-4"><div><h3 className="text-[14px] font-semibold text-ink">行业分类配置</h3><p className="mt-1 text-[12px] text-ink-4">沿用现有行业分类；行业只帮助理解采购背景，不会因为出现某个行业词就算作业务命中。</p></div><div className="space-y-3">{profile.contexts.map((context, index) => <div key={context.id} className="rounded-card border border-line bg-bg-sunk p-3"><div className="grid gap-3 sm:grid-cols-[180px_1fr]"><Field label="行业名称"><Input value={context.name} onChange={(e) => updateContext(index, { name: e.target.value })} /></Field><Field label="行业说明"><Input value={context.description} onChange={(e) => updateContext(index, { description: e.target.value })} /></Field></div><div className="mt-2 font-mono text-[11px] text-ink-4">行业 ID：{context.id}</div></div>)}</div><Field label="给模型的总体说明" hint="补充公司的业务范围和排除边界。"><Textarea className="min-h-[100px]" value={profile.notes} onChange={(e) => setProfile((current) => ({ ...current, notes: e.target.value }))} placeholder="例如：水利项目关注安全监测和信息化服务，不承接水利工程施工。" /></Field></div> : <div className="space-y-3"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-[15px] font-semibold text-ink">{BUSINESS_GROUPS.find((group) => group.id === activeTab)?.name}</h3><p className="mt-1 text-[12px] text-ink-4">{BUSINESS_GROUPS.find((group) => group.id === activeTab)?.description}</p></div><Button size="sm" onClick={() => addCapability(activeTab)}>＋ 添加业务细分</Button></div>{profile.capabilities.map((capability, index) => capability.businessCategory === activeTab && <CapabilityEditor key={capability.id} capability={capability} onChange={(patch) => updateCapability(index, patch)} />)}{profile.capabilities.every((capability) => capability.businessCategory !== activeTab) && <Empty>此类别还没有业务细分</Empty>}</div>}
               <div className="mt-3 flex flex-wrap gap-2">
                 <ReasonDialog open={draftDialog} title="保存业务配置草稿" description="保存会生成不可变版本，但不会立即改变正在运行的业务分析。" confirmLabel="保存草稿" busy={pending === "business-draft"} onClose={() => setDraftDialog(false)} onSubmit={saveDraft} />
                 <Button tone="primary" onClick={() => setDraftDialog(true)}>保存草稿</Button>
@@ -178,7 +210,7 @@ function SubnavSection({ title, hint, children }: { title: string; hint: string;
   return <div className="mb-4 last:mb-0"><div className="px-2 pb-1.5"><div className="text-[12.5px] font-semibold text-ink">{title}</div><div className="mt-0.5 text-[11.5px] leading-relaxed text-ink-4">{hint}</div></div><div className="space-y-0.5">{children}</div></div>;
 }
 
-function SubnavItem({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
+function SubnavItem({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
   return <button type="button" onClick={onClick} className={`flex min-h-9 w-full items-center rounded-control px-2.5 text-left text-[13px] transition-colors ${active ? "bg-accent-soft text-accent font-medium" : "text-ink-2 hover:bg-bg-sunk hover:text-ink"}`}><span className="min-w-0 truncate">{children}</span></button>;
 }
 
@@ -193,14 +225,13 @@ function Step({ number, title, text }: { number: string; title: string; text: st
 function CapabilityEditor({ capability, onChange }: { capability: Capability; onChange: (patch: Partial<Capability>) => void }) {
   return <div className="rounded-card border border-line bg-bg-sunk p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><h3 className="text-[15px] font-semibold text-ink">{capability.name || "未命名能力"}</h3><Badge tone="muted">{capability.id}</Badge></div><p className="mt-1 text-[12px] text-ink-4">{capability.description || "请填写这项能力的业务边界"}</p></div><label className="flex items-center gap-2 text-[12px] text-ink-2"><input type="checkbox" checked={capability.enabled} onChange={(e) => onChange({ enabled: e.target.checked })} />启用</label></div>
     <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_150px]"><Field label="能力名称"><Input value={capability.name} onChange={(e) => onChange({ name: e.target.value })} /></Field><Field label="优先级"><Select value={capability.priority} onChange={(e) => onChange({ priority: e.target.value as Priority })}><option value="重点">重点</option><option value="常规">常规</option><option value="观察">观察</option></Select></Field></div>
-    <div className="mt-3"><Field label="能力说明"><Textarea value={capability.description} onChange={(e) => onChange({ description: e.target.value })} /></Field></div>
-    <div className="mt-3 grid gap-3 lg:grid-cols-2"><ListEditor label="服务动作" hint="例如：测量、整理、数字化、监测、系统建设" values={capability.serviceTerms} onChange={(serviceTerms) => onChange({ serviceTerms })} /><ListEditor label="方法与技术" hint="例如：无人机、多波束、GIS、数据治理" values={capability.methodTerms} onChange={(methodTerms) => onChange({ methodTerms })} /><ListEditor label="交付成果" hint="例如：测量成果、档案数字化成果、平台软件" values={capability.deliverableTerms} onChange={(deliverableTerms) => onChange({ deliverableTerms })} /><ListEditor label="对象与场景" hint="例如：水库、矿山、机关档案、政务平台" values={capability.contextTerms} onChange={(contextTerms) => onChange({ contextTerms })} /><ListEditor label="相关正例" hint="粘贴或概括应当命中的真实项目标题" values={capability.positiveExamples} onChange={(positiveExamples) => onChange({ positiveExamples })} /><ListEditor label="无关反例" hint="明确哪些相似项目应排除" values={capability.negativeExamples} onChange={(negativeExamples) => onChange({ negativeExamples })} /></div>
-    <ListEditor className="mt-3" label="边界与排除规则" hint="例如：只有设备供货、耗材采购且没有服务交付时排除" values={capability.boundaries} onChange={(boundaries) => onChange({ boundaries })} />
+    <div className="mt-3"><Field label="能力说明"><Textarea className="min-h-[80px]" value={capability.description} onChange={(e) => onChange({ description: e.target.value })} /></Field></div>
+    <div className="mt-3 grid gap-3 lg:grid-cols-2"><ListEditor label="能做的业务关键词" hint="写具体业务或交付；不要单独填“迭代、平台、服务、项目”等泛词" values={capability.serviceTerms} onChange={(serviceTerms) => onChange({ serviceTerms, methodTerms: [], deliverableTerms: [] })} /><ListEditor label="明确排除词" hint="写明确不承接的采购内容；命中时作为排除提示，不单独替代 AI 判读" values={capability.negativeKeywords} onChange={(negativeKeywords) => onChange({ negativeKeywords })} /></div>
   </div>;
 }
 
-function ListEditor({ label, hint, values, onChange, className = "" }: { label: string; hint: string; values: string[]; onChange: (values: string[]) => void; className?: string }) {
-  return <div className={className}><Field label={label} hint={`${hint}；每行一条`}><Textarea className="min-h-[84px]" value={values.join("\n")} onChange={(e) => onChange(lines(e.target.value))} /></Field></div>;
+function ListEditor({ label, hint, values = [], onChange, className = "" }: { label: string; hint: string; values: string[]; onChange: (values: string[]) => void; className?: string }) {
+  return <div className={className}><Field label={label} hint={`${hint}；每行一条`}><Textarea className="min-h-[260px]" value={values.join("\n")} onChange={(e) => onChange(lines(e.target.value))} /></Field></div>;
 }
 
 function TestRow({ test, run, pending }: { test: Test; run: ReturnType<typeof useAdminAction>["run"]; pending: string | null }) {

@@ -63,13 +63,13 @@ export default function StarredPage() {
     }
   };
 
-  const action = "text-[12.5px] text-ink-3 transition-colors hover:text-accent";
+  const action = "radar-page-action";
   return (
-    <div className="pb-12">
-      <header className="flex flex-col gap-2 pb-4 pt-5 sm:flex-row sm:items-start sm:justify-between lg:pt-1">
+    <div className="radar-page radar-page-starred pb-12">
+      <header className="radar-page-heading pb-5 pt-5 sm:items-start lg:pt-1">
         <div>
-          <h1 className="text-[24px] font-semibold leading-[1.3] text-ink">收藏</h1>
-          <p className="mt-1.5 text-[13px] text-ink-3">本机收藏的 {SITE.name} 内容，适合稍后阅读和回看。</p>
+          <h1 className="radar-page-title">收藏</h1>
+          <p className="radar-page-subtitle">本机收藏的 {SITE.name} 内容，适合稍后阅读和回看。</p>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 sm:pt-1.5">
           <button type="button" onClick={() => fileRef.current?.click()} className={action}>
@@ -83,7 +83,7 @@ export default function StarredPage() {
           <input ref={fileRef} type="file" accept="application/json,.json" className="sr-only" onChange={(e) => doImport(e.target.files?.[0])} />
         </div>
       </header>
-      <p className="rounded-tile border border-line bg-surface px-4 py-2.5 text-[12.5px] text-ink-3">收藏只保存在当前浏览器；清除浏览器数据或换设备后不会同步。</p>
+      <p className="radar-page-note rounded-tile border px-4 py-3 text-[12.5px]">收藏只保存在当前浏览器；清除浏览器数据或换设备后不会同步。</p>
       <Presence show={!!notice} enter="anim-notice-in" exit="anim-fade-out" duration={160}>
         <div
           role="status"
@@ -96,10 +96,11 @@ export default function StarredPage() {
         </div>
       </Presence>
       {!mounted ? null : starred.length === 0 ? (
-        <div className="mt-3 flex flex-col items-center rounded-card border border-dashed border-line-strong px-6 py-12 text-center">
-          <IconBookmark size={20} className="text-ink-4" />
-          <p className="mt-3 text-[13px] text-ink-3">还没有收藏内容。点开任意一条内容，在详情页点击收藏即可添加。</p>
-          <Link to="/" className="mt-4 text-[12.5px] font-medium text-accent hover:text-accent-ink">
+        <div className="radar-page-empty mt-3 flex flex-col items-center justify-center rounded-card border border-dashed px-6 py-12 text-center">
+          <span className="grid size-11 place-items-center rounded-full bg-accent/10 text-accent"><IconBookmark size={20} /></span>
+          <p className="mt-3 text-[14px] text-ink-3">还没有收藏内容</p>
+          <p className="mt-1 text-[12.5px] text-ink-4">打开招标信息，在详情页点击收藏后就会显示在这里。</p>
+          <Link to="/" className="radar-page-action mt-4">
             去看精选 →
           </Link>
         </div>

@@ -12,11 +12,12 @@ import { z } from "zod";
 import { CATEGORY_KEYS } from "@aihot/contracts/taxonomy";
 import { CATEGORIES } from "@aihot/industry/taxonomy";
 import { SELECTION } from "@aihot/industry/selection";
-import { sql } from "../db.ts";
+import { sql, type Tx } from "../db.ts";
 import { chatJson, MODELS, type ContentPart } from "../providers/llm.ts";
 import { completeReceipt, ProviderRejectedError } from "../providers/receipts.ts";
 import { collapseWhitespace } from "../lib/text.ts";
 import { modelFor } from "./models.ts";
+import { articleText } from "../content/quality.ts";
 import { buildMaterial, firstImagePart, loadAnalyzeInput, type AnalyzeInputArticle } from "./input.ts";
 import { pageFetchable } from "../content/extract.ts";
 import { shutdownSignal } from "../jobs/queue.ts";
@@ -26,8 +27,9 @@ import {
   type IdentityGuard,
 } from "./writing.ts";
 import { CATEGORY_BY_ITEM_TYPE, CATEGORY_GUIDE, CATEGORY_TAGS, ENTITIES, ENTITY_TAGS, ITEM_TYPES, normalizeTags, TOPIC_TAGS } from "./vocabulary.ts";
-import { businessProfileVersion, loadBusinessProfile, loadBusinessProfileVersion, type BusinessProfile } from "./business.ts";
+import { businessCalibrationExamples, businessProfileVersion, loadBusinessProfile, loadBusinessProfileVersion, type BusinessCalibrationExample, type BusinessProfile } from "./business.ts";
 import { businessPromptValues, promptText, promptVersion } from "./prompts.ts";
+import { DEFAULT_SCORING_POLICY, loadScoringPolicy, weightedScore, type ScoringPolicy, type ScoringWeights } from "./scoring-policy.ts";
 
 export { buildMaterial, loadAnalyzeInput, type AnalyzeInputArticle };
 
@@ -67,10 +69,26 @@ const SCORE_CALL: Record<string, { temperature: number; maxTokens: number; timeo
 const scoreCall = (model: string) => SCORE_CALL[model] ?? { temperature: 0.2, maxTokens: 1024, timeoutMs: 120_000 };
 
 /** The score prompt: the industry's taste (industry/prompts/selection-score.md). */
-export const SCORE_SYSTEM = promptText("selection-score", businessPromptValues());
-const scoreSystem = (profile?: BusinessProfile) => promptText("selection-score", businessPromptValues(profile));
+const scorePolicyPromptValues = (policy: ScoringPolicy) => ({
+  scoreWeights: `业务匹配 ${policy.weights.fit}%、地域匹配 ${policy.weights.region}%、开标时效 ${policy.weights.deadline}%`,
+  dueSoonDays: String(policy.dueSoonDays),
+});
+export const SCORE_SYSTEM = promptText("selection-score", { ...businessPromptValues(), ...scorePolicyPromptValues(DEFAULT_SCORING_POLICY) });
+const scoreSystem = (profile: BusinessProfile | undefined, policy: ScoringPolicy) => promptText("selection-score", { ...businessPromptValues(profile), ...scorePolicyPromptValues(policy) });
 
-export const ScoreSchema = z.object({ attentionScore: z.coerce.number().int().min(0).max(100) });
+const ScoreAxisSchema = z.object({
+  score: z.coerce.number().int().min(0).max(10),
+  reason: z.string().trim().min(1).max(160),
+});
+const ScoreDimensionsSchema = z.object({
+  fit: ScoreAxisSchema,
+  region: ScoreAxisSchema,
+  deadline: ScoreAxisSchema,
+});
+export const ScoreSchema = z.object({
+  dimensions: ScoreDimensionsSchema,
+  deadlineStatus: z.enum(["open", "due_soon", "passed", "unknown"]).default("unknown"),
+});
 
 const SCORE_TIME = new Intl.DateTimeFormat("sv-SE", {
   timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
@@ -82,22 +100,26 @@ export function scoreInputTime(at: Date): string {
   return `${SCORE_TIME.format(at).replace(" ", "T")}${ms ? `.${String(ms).padStart(3, "0")}` : ""}+08:00`;
 }
 
+function scoreEvaluationDate(at: Date): string {
+  return SCORE_TIME.format(at).slice(0, 10);
+}
+
 /**
  * The score input: no source facts (the prompt forbids guessing them), the publication time, the
  * original title (items are scored before any Chinese copy exists) and the whole body.
  */
-export function buildScoreInput(a: AnalyzeInputArticle): string {
+export function buildScoreInput(a: AnalyzeInputArticle, dueSoonDays = DEFAULT_SCORING_POLICY.dueSoonDays): string {
   let body: string;
   if (a.xPost) {
     const quoted = a.xPost.quoted?.text ? `\n\n[引用 ${a.xPost.quoted.handle ? `@${a.xPost.quoted.handle}` : "原推文"}]：${a.xPost.quoted.text}` : "";
     body = `${String(a.xPost.text ?? "").trim()}${quoted}`.trim();
   } else {
-    body = (a.bodyText ?? a.excerpt ?? "").trim();
+    body = articleText(a.bodyText, a.excerpt) ?? "";
   }
   if (!body) body = a.title;
   const at = a.publishedAt ?? a.discoveredAt ?? null;
   return [
-    "请按系统规则评估以下单篇材料所代表的事件。只输出 attentionScore。",
+    `请按系统规则评估以下单篇材料。当前评估日期（北京时间）为 ${scoreEvaluationDate(new Date())}；${dueSoonDays} 天内开标视为低优先级。输出三项分数、开标状态及各自依据，不要补充材料没有提供的事实。`,
     `【发布时间（北京时间）】\n${at ? scoreInputTime(at) : ""}`,
     `【标题】\n${a.title.trim()}`,
     `【完整正文】\n${body.length > MAX_BODY_CHARS ? body.slice(0, MAX_BODY_CHARS) : body}`,
@@ -217,12 +239,12 @@ const structureSystem = (profile?: BusinessProfile) => promptText("structure", {
 });
 
 export interface AnalysisRun {
-  prefilter: BusinessContract & { label: "PASS" | "BLOCK" | "UNKNOWN"; reason: string; model: string; receiptId: number; reused: boolean; profileVersion: string };
+  prefilter: BusinessContract & { label: "PASS" | "BLOCK" | "UNKNOWN"; reason: string; model: string; receiptId: number; reused: boolean; profileVersion: string; calibrationExamples: BusinessCalibrationExample[] };
   /**
    * The independent score calls and the tier threshold they are held against; absent when the material
    * is not scored. `refused`: the model's content filter declined it, so it is not selected.
    */
-  scores: { model: string; threshold: number; values: number[]; receiptIds: number[]; reused: boolean; refused?: boolean } | null;
+  scores: { model: string; threshold: number; values: number[]; dimensions: z.infer<typeof ScoreDimensionsSchema>[]; deadlineStatuses: Array<z.infer<typeof ScoreSchema>["deadlineStatus"]>; weights: ScoringWeights; dueSoonDays: number; receiptIds: number[]; reused: boolean; refused?: boolean } | null;
   /** The reader-facing copy: `understand` (selected, near-selected), `summarize`, `verbatim` (a Chinese short post), `none`. */
   writing: {
     kind: "understand" | "summarize" | "verbatim" | "none";
@@ -247,7 +269,7 @@ export function waitsForPage(a: AnalyzeInputArticle): boolean {
   return a.bodyStatus === "pending" && !a.bodyText && !a.xPost && pageFetchable(a.url, a.source.kind);
 }
 
-type StepOpts = { attemptTag?: string; scoreModel?: string; businessProfile?: BusinessProfile };
+type StepOpts = { attemptTag?: string; scoreModel?: string; businessProfile?: BusinessProfile; calibrationExamples?: BusinessCalibrationExample[] };
 export class AnalysisInterruptedError extends Error {}
 
 function checkAnalysisRunning() {
@@ -285,7 +307,7 @@ async function runPrefilter(a: AnalyzeInputArticle, opts: StepOpts): Promise<Ana
     subject: subjectOf(a),
     promptVersion: `${promptVersion("prefilter")}+business@${businessProfileVersion(profile)}`,
     system: prefilterSystem(profile),
-    user: prefilterUser(a, profile),
+    user: prefilterUser(a, profile, opts.calibrationExamples),
     schema: PrefilterSchema,
     temperature: 0,
     maxTokens: 8_192,
@@ -295,12 +317,12 @@ async function runPrefilter(a: AnalyzeInputArticle, opts: StepOpts): Promise<Ana
   const evidence = verifyEvidence(a, res.data.evidence);
   const verifiedIds = new Set(evidence.filter((e) => e.verified).map((e) => e.id));
   const capabilityIds = new Set((profile?.capabilities ?? []).filter((c) => c.enabled).map((c) => c.id));
-  const hasStructuredContract = res.data.materialCoverage.status !== "unknown" || res.data.projects.length > 0 || res.data.evidence.length > 0;
   const hasMatchedTask = res.data.projects.some((p) => p.tasks.some((task) => task.matches.some((match) =>
     (match.relation === "direct" || match.relation === "partial") && capabilityIds.has(match.capabilityId) && match.evidenceIds.some((id) => verifiedIds.has(id)))));
   let label = res.data.label;
   if (label === "BLOCK" && missingEvidence(a)) label = "UNKNOWN";
-  if (label === "PASS" && hasStructuredContract && !hasMatchedTask) label = "UNKNOWN";
+  if (label === "PASS" && !hasMatchedTask) label = "UNKNOWN";
+  if (label === "BLOCK") await sql.begin((tx) => discardReceiptContent(tx, res.receiptId));
   return {
     ...res.data,
     label,
@@ -309,15 +331,35 @@ async function runPrefilter(a: AnalyzeInputArticle, opts: StepOpts): Promise<Ana
     receiptId: res.receiptId,
     reused: res.reused,
     profileVersion: businessProfileVersion(profile),
+    calibrationExamples: opts.calibrationExamples ?? [],
   };
+}
+
+async function discardReceiptContent(tx: Tx, receiptId: number): Promise<void> {
+  await tx`UPDATE receipts SET logical_key = 'discarded:' || id::text, subject = NULL, status = 'completed',
+    request = NULL, response = NULL, error = NULL, completed_at = coalesce(completed_at, now()), updated_at = now()
+    WHERE id = ${receiptId}`;
+  await tx`UPDATE receipt_attempts SET error = NULL WHERE receipt_id = ${receiptId}`;
+}
+
+async function discardArticleReceipts(tx: Tx, articleId: string): Promise<void> {
+  const subject = `article:${articleId}`;
+  const rows = await tx<{ id: number }[]>`UPDATE receipts SET logical_key = 'discarded:' || id::text, subject = NULL,
+    request = NULL, response = NULL, error = NULL, updated_at = now()
+    WHERE subject = ${subject} OR subject LIKE ${`${subject}@%`} OR subject LIKE ${`${subject}:%`}
+    RETURNING id`;
+  for (const row of rows) await tx`UPDATE receipt_attempts SET error = NULL WHERE receipt_id = ${row.id}`;
 }
 
 async function runScores(a: AnalyzeInputArticle, threshold: number, opts: StepOpts): Promise<NonNullable<AnalysisRun["scores"]>> {
   const model = opts.scoreModel ?? (await modelFor("score"));
   const profile = opts.businessProfile;
+  const policy = await loadScoringPolicy();
   const call = scoreCall(model);
-  const input = buildScoreInput(a);
+  const input = buildScoreInput(a, policy.dueSoonDays);
   const values: number[] = [];
+  const dimensions: z.infer<typeof ScoreDimensionsSchema>[] = [];
+  const deadlineStatuses: Array<z.infer<typeof ScoreSchema>["deadlineStatus"]> = [];
   const receiptIds: number[] = [];
   let reused = true;
   // One after the other: the second call reuses the provider's cached prompt.
@@ -325,21 +367,23 @@ async function runScores(a: AnalyzeInputArticle, threshold: number, opts: StepOp
     checkAnalysisRunning();
     try {
       const res = await chatJson({
-        model, purpose: "score_article", subject: subjectOf(a), promptVersion: `${promptVersion("selection-score")}+business@${businessProfileVersion(profile)}`, system: scoreSystem(profile), user: input,
+        model, purpose: "score_article", subject: subjectOf(a), promptVersion: `${promptVersion("selection-score")}+business@${businessProfileVersion(profile)}+policy@${policy.weights.fit}-${policy.weights.region}-${policy.weights.deadline}-due${policy.dueSoonDays}`, system: scoreSystem(profile, policy), user: input,
         schema: ScoreSchema, temperature: call.temperature, maxTokens: call.maxTokens, timeoutMs: call.timeoutMs,
         // Each call is its own paid request; an explicit re-evaluation gets new ones.
         attemptTag: tagged(opts.attemptTag, `score-${i + 1}`),
       });
-      values.push(res.data.attentionScore);
+      values.push(weightedScore({ fit: res.data.dimensions.fit.score, region: res.data.dimensions.region.score, deadline: res.data.dimensions.deadline.score }, policy.weights));
+      dimensions.push(res.data.dimensions);
+      deadlineStatuses.push(res.data.deadlineStatus);
       receiptIds.push(res.receiptId);
       reused &&= res.reused;
     } catch (error) {
       // The model's content filter declines the material (Zhipu 1301): not scored, so not selected.
-      if (isContentFilter(error)) return { model, threshold, values, receiptIds, reused: false, refused: true };
+      if (isContentFilter(error)) return { model, threshold, values, dimensions, deadlineStatuses, weights: policy.weights, dueSoonDays: policy.dueSoonDays, receiptIds, reused: false, refused: true };
       throw error;
     }
   }
-  return { model, threshold, values, receiptIds, reused };
+  return { model, threshold, values, dimensions, deadlineStatuses, weights: policy.weights, dueSoonDays: policy.dueSoonDays, receiptIds, reused };
 }
 
 async function runStructure(a: AnalyzeInputArticle, opts: StepOpts): Promise<NonNullable<AnalysisRun["structure"]>> {
@@ -443,7 +487,8 @@ async function runSummarize(a: AnalyzeInputArticle, opts: StepOpts): Promise<Non
 export async function runAnalysis(a: AnalyzeInputArticle, opts: StepOpts & { stages?: "selection" | "all" } = {}): Promise<AnalysisRun> {
   checkAnalysisRunning();
   const businessProfile = opts.businessProfile ?? await loadBusinessProfile();
-  const stepOpts = { ...opts, businessProfile };
+  const calibrationExamples = opts.calibrationExamples ?? await businessCalibrationExamples(a, businessProfile);
+  const stepOpts = { ...opts, businessProfile, calibrationExamples };
   const prefilter = await runPrefilter(a, stepOpts);
   // UNKNOWN continues for evidence gathering and a readable summary, but remains UNKNOWN in the final result.
   if (prefilter.label === "BLOCK") return { prefilter, scores: null, writing: null, structure: null };
@@ -513,15 +558,19 @@ export function normalizeAnalysis(run: AnalysisRun) {
   const label = run.prefilter.label;
   const titleZh = collapseWhitespace(run.writing?.titleZh ?? "");
   const summaryZh = (run.writing?.summaryZh ?? "").trim();
-  // A successful writing call never upgrades an unresolved business judgement.
-  const relevance = label === "BLOCK" ? "block" : label === "UNKNOWN" || (run.writing && (!titleZh || !summaryZh)) ? "unknown" : "pass";
+  // Business relevance is independent of whether the copy step produced a displayable title/summary.
+  const relevance = label === "BLOCK" ? "block" : label === "UNKNOWN" ? "unknown" : "pass";
   // Selected when the two scores add up to twice the tier threshold; the mean, floored,
   // is the score shown (it never decides a half point on its own).
   const values = run.scores && !run.scores.refused ? run.scores.values : null;
   const sum = values?.length === SCORE_CALLS ? values.reduce((total, v) => total + v, 0) : null;
   const score = sum === null ? null : Math.floor(sum / SCORE_CALLS);
   const threshold = run.scores?.threshold ?? null;
-  const selected = relevance === "pass" && sum !== null && threshold !== null && sum >= threshold * SCORE_CALLS;
+  const deadlineStatuses = run.scores?.deadlineStatuses ?? [];
+  const deadlineStatus = deadlineStatuses.length === SCORE_CALLS && deadlineStatuses.every((status) => status === deadlineStatuses[0])
+    ? deadlineStatuses[0]!
+    : "unknown";
+  const selected = relevance === "pass" && deadlineStatus !== "due_soon" && deadlineStatus !== "passed" && sum !== null && threshold !== null && sum >= threshold * SCORE_CALLS;
   const subjects = run.structure?.subjects ?? [];
   const tags = [...(run.writing?.tags ?? run.structure?.tags ?? [])];
   for (const s of subjects) {
@@ -530,6 +579,8 @@ export function normalizeAnalysis(run: AnalysisRun) {
   }
   const businessMatch = {
     label,
+    reason: run.prefilter.reason,
+    calibrationExamples: run.prefilter.calibrationExamples,
     materialCoverage: run.prefilter.materialCoverage,
     projects: run.prefilter.projects,
     contexts: run.prefilter.contexts,
@@ -542,7 +593,11 @@ export function normalizeAnalysis(run: AnalysisRun) {
     selected,
     score,
     scores: values,
+    scoreDetails: run.scores?.dimensions ?? null,
     scoreModel: run.scores?.model ?? null,
+    scoreWeights: run.scores?.weights ?? null,
+    dueSoonDays: run.scores?.dueSoonDays ?? DEFAULT_SCORING_POLICY.dueSoonDays,
+    deadlineStatus,
     scoreRefused: run.scores?.refused ?? false,
     threshold,
     category: run.structure?.category ?? null,
@@ -581,11 +636,12 @@ export async function analyzeArticle(articleId: string, opts: StepOpts = {}): Pr
     run.prefilter.receiptId, ...(run.scores?.receiptIds ?? []), ...(run.writing?.receiptIds ?? []), ...(run.structure ? [run.structure.receiptId] : []),
   ];
   const w = run.writing;
+  const scorePolicyVersion = run.scores ? `+score-policy@${run.scores.weights.fit}-${run.scores.weights.region}-${run.scores.weights.deadline}-due${run.scores.dueSoonDays}` : "";
   const detail = {
     prefilter: { label: run.prefilter.label, reason: run.prefilter.reason },
     businessMatch: out.businessMatch,
     businessProfileVersion: run.prefilter.profileVersion,
-    scores: out.scores, scoreModel: out.scoreModel, threshold: out.threshold, ...(out.scoreRefused ? { scoreRefused: true } : {}),
+    scores: out.scores, scoreDetails: out.scoreDetails, scoreModel: out.scoreModel, scoreWeights: out.scoreWeights, dueSoonDays: out.dueSoonDays, deadlineStatus: out.deadlineStatus, threshold: out.threshold, ...(out.scoreRefused ? { scoreRefused: true } : {}),
     ...(w ? { writer: w.kind, writerModel: w.model, itemType: w.itemType ?? null, authorRole: w.authorRole ?? null } : {}),
     ...(w?.identityGuard?.outcome === "fallback" ? { identityGuard: w.identityGuard } : {}),
     fact: out.fact,
@@ -593,17 +649,25 @@ export async function analyzeArticle(articleId: string, opts: StepOpts = {}): Pr
   const committed = await sql.begin(async (tx) => {
     const [current] = await tx<{ revision: number }[]>`SELECT revision FROM articles WHERE id = ${articleId} FOR UPDATE`;
     const stale = !current || current.revision !== input.revision;
+    if (out.relevance === "block") {
+      if (!stale) {
+        await discardArticleReceipts(tx, articleId);
+        await tx`DELETE FROM business_matching_feedback WHERE article_id = ${articleId}`;
+        await tx`DELETE FROM audit_log WHERE subject = ${`business-case:${articleId}`}
+          OR before::text LIKE ${`%${articleId}%`} OR after::text LIKE ${`%${articleId}%`}`;
+        await tx`DELETE FROM articles WHERE id = ${articleId}`;
+      }
+      return { analysisId: null, stale };
+    }
     const [row] = await tx<{ id: number }[]>`
       INSERT INTO analyses (article_id, input_revision, origin, model, prompt_version, receipt_ids, relevance, category, tags,
         subjects, title_zh, summary_zh, reason_zh, score, selected, output)
-      VALUES (${articleId}, ${input.revision}, 'model', ${w?.model ?? run.prefilter.model}, ${`${ANALYZE_PROMPT_VERSION}+runtime-business@${run.prefilter.profileVersion}`}, ${receiptIds},
+      VALUES (${articleId}, ${input.revision}, 'model', ${w?.model ?? run.prefilter.model}, ${`${ANALYZE_PROMPT_VERSION}+runtime-business@${run.prefilter.profileVersion}${scorePolicyVersion}`}, ${receiptIds},
         ${out.relevance}, ${out.category}, ${out.tags}, ${out.subjects}, ${out.titleZh}, ${out.summaryZh}, ${out.reasonZh},
         ${out.score}, ${out.selected}, ${tx.json(detail as never)})
       RETURNING id`;
     for (const id of receiptIds) await completeReceipt(tx, id);
-    if (!stale) {
-      await tx`UPDATE articles SET processing_state = ${out.relevance === "block" ? "blocked" : "analyzed"}, processing_error = NULL WHERE id = ${articleId}`;
-    }
+    if (!stale) await tx`UPDATE articles SET processing_state = 'analyzed', processing_error = NULL WHERE id = ${articleId}`;
     return { analysisId: row!.id, stale };
   });
   const reused = run.prefilter.reused && (run.scores?.reused ?? true) && (w?.reused ?? true) && (run.structure?.reused ?? true);

@@ -10,7 +10,7 @@ import { collapseWhitespace } from "../lib/text.ts";
 import { itemUrl } from "./links.ts";
 import { enqueue, QUEUES, shutdownSignal } from "../jobs/queue.ts";
 import {
-  bodyModeOf, channelOf, displayTags, isIndexable, isPoolEligible, isSelectable, mayRedistribute, type SourceFacts,
+  bodyModeOf, channelOf, displayTags, isCurrentOpportunity, isIndexable, isPoolEligible, isSelectable, mayRedistribute, type SourceFacts,
 } from "./rules.ts";
 
 interface ArticleRow {
@@ -40,6 +40,7 @@ interface AnalysisRow {
   reason_zh: string | null;
   score: number | null;
   selected: boolean | null;
+  output: Record<string, unknown> | null;
 }
 
 interface OverrideRow {
@@ -157,7 +158,7 @@ export async function publishArticleTx(tx: Tx, articleId: string, options: Publi
     FROM sources WHERE id = ${article.source_id}`;
   if (!source) return null;
   const [analysis] = await tx<AnalysisRow[]>`
-    SELECT id, relevance, category, tags, subjects, title_zh, summary_zh, reason_zh, score, selected
+    SELECT id, relevance, category, tags, subjects, title_zh, summary_zh, reason_zh, score, selected, output
     FROM analyses WHERE article_id = ${articleId} ORDER BY input_revision DESC, id DESC LIMIT 1`;
   const [override] = await tx<OverrideRow[]>`SELECT fields, visibility FROM editorial_overrides WHERE article_id = ${articleId}`;
   const [membership] = await tx<{ fact_id: number; story_id: number | null }[]>`
@@ -187,7 +188,10 @@ export async function publishArticleTx(tx: Tx, articleId: string, options: Publi
   const stale = freshnessCutoff !== null && (article.published_at ?? article.discovered_at).getTime() < freshnessCutoff;
   const visibility = stale || source.participation_mode === "isolated" ? "withdrawn" : (override?.visibility ?? "public");
 
-  const eligible = !stale && isPoolEligible({ participationMode: source.participation_mode, relevance, title, summary });
+  const eligible = !stale && isCurrentOpportunity({
+    itemType: typeof analysis?.output?.itemType === "string" ? analysis.output.itemType : null,
+    deadlineStatus: typeof analysis?.output?.deadlineStatus === "string" ? analysis.output.deadlineStatus : null,
+  }) && isPoolEligible({ participationMode: source.participation_mode, relevance, title, summary });
   const selected = isSelectable(eligible, judgedSelected, source.tier);
   const reason = selected ? pickString(f.reason, analysis?.reason_zh ?? null) : null;
   const hasXPost = !!article.x_post;

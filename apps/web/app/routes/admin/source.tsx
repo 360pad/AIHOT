@@ -34,6 +34,20 @@ interface Source {
   updated_at: string;
 }
 
+type ProcessingMode = "collect_only" | "collect_and_analyze";
+
+function processingModeOf(source: Pick<Source, "kind" | "config">): ProcessingMode {
+  const aihot = source.config._aihot;
+  const configured = aihot && typeof aihot === "object" ? (aihot as Record<string, unknown>).processingMode : null;
+  return source.kind === "mp_account" && configured !== "collect_and_analyze" ? "collect_only" : "collect_and_analyze";
+}
+
+function configWithProcessingMode(source: Pick<Source, "kind">, config: Record<string, unknown>, mode: ProcessingMode) {
+  if (source.kind !== "mp_account") return config;
+  const current = config._aihot && typeof config._aihot === "object" ? config._aihot as Record<string, unknown> : {};
+  return { ...config, _aihot: { ...current, processingMode: mode } };
+}
+
 /** X runs: pages read, and older stretches still to read (backlog) or given up (dropped). */
 interface RunDetail {
   pages?: number;
@@ -61,7 +75,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
 export const meta: Route.MetaFunction = ({ loaderData }) => [{ title: `${loaderData?.source.name ?? "信源"} · ${SITE.name} 后台` }];
 
-type Draft = Pick<Source, "name" | "interval_minutes" | "tier" | "participation_mode" | "signal_group_id" | "first_party" | "owner_entity_id" | "site_fulltext" | "syndicate_fulltext"> & { tags: string; config: string };
+type Draft = Pick<Source, "name" | "interval_minutes" | "tier" | "participation_mode" | "signal_group_id" | "first_party" | "owner_entity_id" | "site_fulltext" | "syndicate_fulltext"> & { tags: string; config: string; processing_mode: ProcessingMode };
 
 function draftOf(s: Source): Draft {
   return {
@@ -76,11 +90,13 @@ function draftOf(s: Source): Draft {
     syndicate_fulltext: s.syndicate_fulltext,
     tags: s.tags.join(", "),
     config: JSON.stringify(s.config, null, 2),
+    processing_mode: processingModeOf(s),
   };
 }
 
 export default function SourceDetail({ loaderData }: Route.ComponentProps) {
   const { source: s, runs, items, stats, history } = loaderData;
+  const scheduledTender = ["rss", "web_list", "json_list"].includes(s.kind);
   const { run, pending } = useAdminAction();
   const [draft, setDraft] = useState<Draft>(() => draftOf(s));
   const [draftFor, setDraftFor] = useState(s.updated_at);
@@ -106,11 +122,12 @@ export default function SourceDetail({ loaderData }: Route.ComponentProps) {
     const next: Record<string, unknown> = {
       ...draft,
       tags: draft.tags.split(/[,，]/).map((t) => t.trim()).filter(Boolean),
-      config,
+      config: configWithProcessingMode(s, config as Record<string, unknown>, draft.processing_mode),
       interval_minutes: Number(draft.interval_minutes),
       signal_group_id: draft.signal_group_id || null,
       owner_entity_id: draft.owner_entity_id || null,
     };
+    delete next.processing_mode;
     const before = draftOf(s) as Record<string, unknown>;
     const changed: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(next)) {
@@ -128,7 +145,7 @@ export default function SourceDetail({ loaderData }: Route.ComponentProps) {
   })();
 
   return (
-    <AdminPage
+    <AdminPage wide
       title={
         <span className="flex flex-wrap items-center gap-2">
           {s.name}
@@ -199,14 +216,22 @@ export default function SourceDetail({ loaderData }: Route.ComponentProps) {
               <Field label="名称">
                 <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
               </Field>
-              <Field label="采集间隔（分钟）">
-                <Input type="number" min={1} max={1440} value={draft.interval_minutes} onChange={(e) => setDraft({ ...draft, interval_minutes: Number(e.target.value) })} />
+              <Field label={scheduledTender ? "采集计划" : "采集间隔（分钟）"} hint={scheduledTender ? "招投标信源按后台设置中的统一北京时间计划执行。" : undefined}>
+                {scheduledTender ? <div className="rounded-control bg-accent-soft px-3 py-2 text-[13px] text-accent">由后台“招投标采集计划”统一控制</div> : <Input type="number" min={1} max={1440} value={draft.interval_minutes} onChange={(e) => setDraft({ ...draft, interval_minutes: Number(e.target.value) })} />}
               </Field>
               <Field label="参与方式" hint="氛围只作热点讨论证据，不单独成为内容">
                 <Select value={draft.participation_mode} onChange={(e) => setDraft({ ...draft, participation_mode: e.target.value })}>
                   {Object.entries(MODE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </Select>
               </Field>
+              {s.kind === "mp_account" && (
+                <Field label="公众号处理方式" hint="仅采集不调用 AI；采集服务费用仍按信源计费">
+                  <Select value={draft.processing_mode} onChange={(e) => setDraft({ ...draft, processing_mode: e.target.value as ProcessingMode })}>
+                    <option value="collect_only">仅采集（推荐）</option>
+                    <option value="collect_and_analyze">采集并分析</option>
+                  </Select>
+                </Field>
+              )}
               <Field label="等级">
                 <Select value={draft.tier} onChange={(e) => setDraft({ ...draft, tier: e.target.value })}>
                   {Object.entries(TIER_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -355,9 +380,10 @@ function patchPreview(draft: Draft, s: Source): Record<string, true> {
   const out: Record<string, true> = {};
   const saved = draftOf(s);
   for (const k of Object.keys(draft) as Array<keyof Draft>) {
+    if (k === "processing_mode") continue;
     if (k === "config") {
       try {
-        if (JSON.stringify(JSON.parse(draft.config)) !== JSON.stringify(s.config)) out.config = true;
+        if (JSON.stringify(configWithProcessingMode(s, JSON.parse(draft.config), draft.processing_mode)) !== JSON.stringify(s.config)) out.config = true;
       } catch {
         out.config = true;
       }

@@ -1,5 +1,6 @@
 import { SITE } from "@aihot/industry/site";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Link, useRevalidator } from "react-router";
 import type { Route } from "./+types/settings";
 import { adminGet } from "../../lib/admin.server";
 import { useAdminAction } from "../../features/admin/action";
@@ -11,6 +12,12 @@ interface Settings {
   contact: { wechatQr: string; feishuQr: string };
   targets: Array<{ key: string; purpose: string; kind: string; enabled: boolean; enabled_at: string | null; config_ref: string | null; note: string | null; deliveries_7d: number; last_sent_at: string | null }>;
   budgets: Array<{ service: string; per_minute: number; per_hour: number; per_day: number; note: string | null; updated_at: string; used_day: number; used_hour: number }>;
+  collectionSchedule: { times: string[]; timezone: string };
+  collectionStatus: {
+    checkedAt: string;
+    fetch: { runs: number; ok: number; failed: number; found: number; created: number };
+    processing: { pending: number; failed: number; analyzed: number; published: number; errors: Array<{ error: string; count: number }> };
+  };
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -103,9 +110,84 @@ function TargetToggle({ t }: { t: Settings["targets"][number] }) {
   );
 }
 
+function CollectionScheduleCard({ schedule, status }: { schedule: Settings["collectionSchedule"]; status: Settings["collectionStatus"] }) {
+  const { run, pending } = useAdminAction();
+  const revalidator = useRevalidator();
+  const [times, setTimes] = useState(() => schedule.times.length ? schedule.times : ["08:00", "17:00"]);
+  const [open, setOpen] = useState(false);
+  const [watching, setWatching] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const changed = JSON.stringify(times) !== JSON.stringify(schedule.times);
+  useEffect(() => {
+    if (!watching) return;
+    let left = 10;
+    const timer = window.setInterval(() => {
+      if (left-- <= 0) {
+        window.clearInterval(timer);
+        setWatching(false);
+      } else if (revalidator.state === "idle") {
+        revalidator.revalidate();
+      }
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [revalidator, watching]);
+  const startFetch = async () => {
+    const result = await run<{ enqueued: number }>("POST", "/api/admin/sources/fetch-scheduled", {}, { label: "fetch-scheduled", success: "已加入采集队列，正在执行" });
+    if (result) {
+      setNotice(`已加入 ${result.enqueued} 个招投标信源，正在等待采集和处理结果。`);
+      setWatching(true);
+    }
+  };
+  return (
+    <Card title="招投标采集计划" right={<Badge tone="info">北京时间</Badge>}>
+      <div className="text-[13px] text-ink-2">系统每天只在设定时段采集招投标信源；每分钟检查任务不会额外发起抓取。</div>
+      <div className="mt-4 flex flex-wrap items-end gap-3">
+        {times.map((time, index) => (
+          <label key={`${index}-${time}`} className="flex flex-col gap-1 text-[12px] text-ink-3">
+            第 {index + 1} 次
+            <Input type="time" value={time} onChange={(e) => setTimes(times.map((v, i) => i === index ? e.target.value : v))} className="!w-32" />
+          </label>
+        ))}
+        {times.length < 4 && <Button size="sm" tone="ghost" onClick={() => setTimes([...times, "12:00"])}>增加时段</Button>}
+        {times.length > 1 && <Button size="sm" tone="ghost" onClick={() => setTimes(times.slice(0, -1))}>减少时段</Button>}
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <Button tone="primary" disabled={!changed} onClick={() => setOpen(true)}>保存采集计划</Button>
+        <Button busy={pending === "fetch-scheduled"} onClick={startFetch}>立即抓取一轮</Button>
+        <Link className="text-[12px] text-accent hover:underline" to="/admin/runs">查看运行与错误</Link>
+        <span className="text-[12px] text-ink-4">手动抓取与定时抓取使用同一条采集链路，仍受请求上限保护。</span>
+      </div>
+      {notice && <div className="mt-3 rounded-control bg-accent-softer px-3 py-2 text-[12.5px] text-ink-2">{notice}</div>}
+      <div className="mt-4 rounded-card bg-bg-sunk/60 px-3.5 py-3 text-[12.5px] text-ink-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="font-medium text-ink">最近 2 小时执行状态</span>
+          <span className="text-ink-4">采集任务 {status.fetch.runs} 次 · 成功 {status.fetch.ok} · 失败 {status.fetch.failed}</span>
+        </div>
+        <div className="mt-1">发现 {num(status.fetch.found)} 条，新增 {num(status.fetch.created)} 条，已发布 {num(status.processing.published)} 条；待处理 {num(status.processing.pending)} 条，处理失败 {num(status.processing.failed)} 条。</div>
+        {status.processing.errors.length > 0 && (
+          <div className="mt-2 space-y-1 text-hot">
+            {status.processing.errors.map((item) => <div key={item.error} className="break-words">{item.count} 条：{item.error}</div>)}
+          </div>
+        )}
+        {status.processing.failed > 0 && <div className="mt-2 text-ink-3">采集成功不代表 AI 处理成功；DeepSeek 余额不足或正文提取服务未配置时，条目会暂不进入首页精选，具体错误可在“运行”中查看。</div>}
+      </div>
+      <ReasonDialog
+        open={open}
+        title="保存招投标采集计划"
+        description={`每天将在 ${times.join("、")}（北京时间）执行采集。`}
+        confirmLabel="保存"
+        busy={pending === "schedule"}
+        onClose={() => setOpen(false)}
+        onSubmit={async (reason) => (await run("PUT", "/api/admin/collection-schedule", { times, reason }, { label: "schedule", success: "采集计划已更新" })) !== null}
+      />
+    </Card>
+  );
+}
+
 export default function SettingsAdmin({ loaderData: s }: Route.ComponentProps) {
   return (
-    <AdminPage title="设置" subtitle="不改代码即可替换的运营设置。每次修改都写入审计记录。">
+    <AdminPage wide title="设置" subtitle="不改代码即可替换的运营设置。每次修改都写入审计记录。">
+      <CollectionScheduleCard schedule={s.collectionSchedule} status={s.collectionStatus} />
       <div className="grid gap-5 xl:grid-cols-2">
         <Card title="关于页二维码">
           <div className="space-y-5">

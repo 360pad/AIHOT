@@ -70,7 +70,10 @@ export function meta({ error }: Route.MetaArgs) {
 function SiteShell({ changelogVersion, children }: { changelogVersion: string | null; children: ReactNode }) {
   const navigation = useNavigation();
   const { pathname } = useLocation();
-  const radarPage = pathname === "/" || pathname === "/agent" || pathname === "/about" || pathname === "/changelog";
+  const radarPage = pathname === "/" || pathname === "/industry" || pathname === "/agent" || pathname === "/about" || pathname === "/changelog"
+    || pathname.startsWith("/all") || pathname === "/starred" || pathname === "/hot" || pathname.startsWith("/topics")
+    || pathname.startsWith("/daily") || pathname.startsWith("/weekly") || pathname.startsWith("/monthly");
+  const radarCanvasPage = pathname === "/" || pathname === "/industry";
   return (
     <div className={`flex min-h-dvh ${radarPage ? "radar-shell" : ""}`}>
       <NavigationProgress active={navigation.state === "loading"} />
@@ -80,7 +83,7 @@ function SiteShell({ changelogVersion, children }: { changelogVersion: string | 
       <Sidebar changelogVersion={changelogVersion} />
       {/* Mobile shell (≤ 960px): one centred column, the tab bar below. Desktop: the page fills the main area
           up to the list width (--page-max-wide), centred beyond it. */}
-      <main id="main" className="min-w-0 flex-1 pb-[calc(72px+env(safe-area-inset-bottom))] lg:px-7 lg:pb-[72px] lg:pt-6 radar-main">
+      <main id="main" className={`min-w-0 flex-1 pb-[calc(72px+env(safe-area-inset-bottom))] lg:px-7 lg:pb-[72px] lg:pt-6 radar-main ${radarCanvasPage ? "radar-main-canvas" : ""}`}>
         <div className="mx-auto w-full max-w-[640px] px-4 lg:max-w-[var(--page-max-wide)] lg:px-0">{children}</div>
       </main>
       <MobileTabBar changelogVersion={changelogVersion} />
@@ -106,7 +109,10 @@ export function ErrorBoundary() {
   const error = useRouteError();
   const site = useRouteLoaderData<typeof loader>("root");
   const { pathname } = useLocation();
-  const status = isRouteErrorResponse(error) ? error.status : 500;
+  const adminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+  const errorData = isRouteErrorResponse(error) && error.data && typeof error.data === "object" ? error.data as { message?: string; requestId?: string; apiStatus?: number } : null;
+  const status = adminRoute ? errorData?.apiStatus ?? (isRouteErrorResponse(error) ? error.status : 500) : isRouteErrorResponse(error) ? error.status : 500;
+  const adminErrorMessage = errorData?.message ?? (adminRoute && error instanceof Error ? error.message.slice(0, 300) : null);
   const notFound = status === 404;
   const body = (
     <div className="flex min-h-[70vh] items-center justify-center px-2 py-16">
@@ -115,8 +121,9 @@ export function ErrorBoundary() {
         <div className="mono text-[12px] text-ink-4">{status}</div>
         <h1 className="mt-1.5 text-[20px] font-bold text-ink">{notFound ? "这里没有内容" : "暂时无法加载"}</h1>
         <p className="mt-2 text-[13.5px] leading-relaxed text-ink-3">
-          {notFound ? "你访问的页面不存在，或内容已不再公开。" : "服务暂时繁忙，请稍后再试。已经加载过的内容不受影响。"}
+          {adminErrorMessage ?? (notFound ? "你访问的页面不存在，或内容已不再公开。" : "服务暂时繁忙，请稍后再试。已经加载过的内容不受影响。")}
         </p>
+        {adminRoute && errorData?.requestId && <p className="mt-2 font-mono text-[11px] text-ink-4">错误编号：{errorData.requestId}</p>}
         <div className="mt-6 flex justify-center gap-2.5">
           <Link to="/" className={buttonClass("primary")}>
             回到精选

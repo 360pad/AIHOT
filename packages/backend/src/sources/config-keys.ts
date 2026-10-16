@@ -14,19 +14,20 @@ const KEYS: Record<SourceRow["kind"], string[]> = {
   ],
   json_list: [
     ...COLLECTED, "url", "mode", "method", "headers", "bodyJson", "bodyForm", "jsonKey", "windowVar", "itemsPath", "itemsObjectValues",
+    "jsonTextPath",
     "titlePaths", "summaryPaths", "summaryIsBody", "authorPaths", "publishedAtPath", "publishedAtUnit", "publishedAtUtcOffset", "externalIdPath",
     "urlTemplate", "urlTemplateFallback", "rawDropKeys", "requireBoolean", "minNumeric", "pagination",
     "baseUrl", "htmlPath", "itemSelector", "linkSelector", "titleSelector", "publishedAtSelector", "publishedAtRegex",
   ],
   // X accounts are mostly read in shards, which apply only these.
   x_search: ["_aihot", "ingestNoiseFilter", "itemUrlPrefixRewrite", "query", "searchType"],
-  mp_account: ["wxid", "ghid", "nickname"],
+  mp_account: ["_aihot", "wxid", "ghid", "nickname", "url"],
   external: [],
 };
 
 // Objects with fixed keys (headers and request bodies are request data, free-form).
 const NESTED: Record<string, string[]> = {
-  _aihot: ["initialBackfillLimit", "initialBackfillMonths", "maxAgeDays"],
+  _aihot: ["initialBackfillLimit", "initialBackfillMonths", "maxAgeDays", "processingMode"],
   ingestNoiseFilter: ["dropMarkers", "dropMarkersTitleOnly", "keepIfMatches"],
   itemUrlPrefixRewrite: ["from", "to"],
   requireBoolean: ["path", "equals"],
@@ -52,7 +53,12 @@ export function unsupportedConfig(kind: SourceRow["kind"], config: Record<string
     if (!allowed.has(key)) out.push(key);
     else if (VALUES[key] && !VALUES[key]!.includes(String(value))) out.push(`${key}=${String(value)}`);
     else if (NESTED[key] && value && typeof value === "object") {
-      for (const sub of Object.keys(value)) if (!NESTED[key]!.includes(sub)) out.push(`${key}.${sub}`);
+      for (const [sub, subValue] of Object.entries(value)) {
+        if (!NESTED[key]!.includes(sub)) out.push(`${key}.${sub}`);
+        if (key === "_aihot" && sub === "processingMode" && !["collect_only", "collect_and_analyze"].includes(String(subValue))) {
+          out.push(`${key}.${sub}=${String(subValue)}`);
+        }
+      }
     }
   }
   return out;

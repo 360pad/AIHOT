@@ -10,6 +10,7 @@ import { allowed, fetchDetail, fetchWebList, type DetailNeed } from "./web-list.
 import { unsupportedConfig } from "./config-keys.ts";
 import { fetchJsonList } from "./json-list.ts";
 import { fetchXSearch, planXShards, readXSearch, shardHandle, shardQuery, SHARDABLE_SQL, tweetToCandidate, type XBacklog, type XRead } from "./x.ts";
+import { COLLECTION_SCHEDULE_KEY, scheduleOf, scheduleWindow, nextScheduledAt } from "./schedule.ts";
 import { FetchError, type Candidate, type SourceRow } from "./types.ts";
 
 export interface CollectResult {
@@ -22,6 +23,12 @@ export interface CollectResult {
 }
 
 const MAX_ITEMS_PER_RUN = 60;
+const SCHEDULED_SOURCE_KINDS = new Set(["rss", "web_list", "json_list"]);
+
+async function collectionTimes(): Promise<string[]> {
+  const [row] = await sql<{ value: unknown }[]>`SELECT value FROM settings WHERE key = ${COLLECTION_SCHEDULE_KEY}`;
+  return scheduleOf(row?.value).times;
+}
 
 export function noiseFiltered(c: Candidate, source: SourceRow): boolean {
   const f = source.config.ingestNoiseFilter;
@@ -89,6 +96,8 @@ export async function collectSource(sourceId: string, opts: { force?: boolean } 
     // WeChat accounts are reconciled by the mp job; external sources only receive reports.
     return { sourceId, status: "skipped", found: 0, created: 0, revised: 0 };
   }
+
+  const scheduleTimes = SCHEDULED_SOURCE_KINDS.has(source.kind) ? await collectionTimes() : null;
 
   const [run] = await sql<{ id: number }[]>`INSERT INTO fetch_runs (source_id) VALUES (${sourceId}) RETURNING id`;
   const firstImport = !source.cursor?.initializedAt;
@@ -204,7 +213,8 @@ export async function collectSource(sourceId: string, opts: { force?: boolean } 
     await sql`
       UPDATE sources SET last_fetch_at = now(), last_ok_at = now(), fail_count = 0, last_error = NULL,
         health = 'ok', cursor = ${sql.json(nextCursor as never)}, updated_at = now(),
-        next_fetch_at = now() + make_interval(mins => interval_minutes)
+        next_fetch_at = CASE WHEN ${scheduleTimes !== null} THEN ${scheduleTimes ? nextScheduledAt(new Date(), scheduleTimes) : null}
+                             ELSE now() + make_interval(mins => interval_minutes) END
       WHERE id = ${sourceId}`;
     await sql`UPDATE fetch_runs SET status = 'ok', finished_at = now(), found_count = ${found}, new_count = ${created},
                 detail = ${detail ? sql.json(detail as never) : null} WHERE id = ${run!.id}`;
@@ -217,7 +227,8 @@ export async function collectSource(sourceId: string, opts: { force?: boolean } 
         fail_count = CASE WHEN ${budget} THEN fail_count ELSE fail_count + 1 END,
         last_error = ${message},
         health = CASE WHEN ${budget} THEN health WHEN fail_count + 1 >= 5 THEN 'failing' ELSE 'degraded' END,
-        next_fetch_at = now() + make_interval(mins => CASE WHEN ${budget} THEN 15 ELSE LEAST(interval_minutes * (fail_count + 2), 360) END),
+        next_fetch_at = CASE WHEN ${scheduleTimes !== null} THEN ${scheduleTimes ? nextScheduledAt(new Date(), scheduleTimes) : null}
+                            ELSE now() + make_interval(mins => CASE WHEN ${budget} THEN 15 ELSE LEAST(interval_minutes * (fail_count + 2), 360) END) END,
         updated_at = now()
       WHERE id = ${sourceId}`;
     await sql`UPDATE fetch_runs SET status = 'failed', finished_at = now(), found_count = ${found}, new_count = ${created}, error = ${message} WHERE id = ${run!.id}`;
@@ -339,19 +350,44 @@ async function scheduleXShards(): Promise<number> {
 /** Every minute: enqueue due sources (enabled, not WeChat/external), oldest due first; X accounts by shard. */
 export async function scheduleDueSources(limit = Number(process.env.FETCH_SCHEDULE_BATCH || 40)): Promise<{ enqueued: number; shards: number }> {
   const kinds: string[] = (process.env.COLLECT_KINDS || "rss,web_list,json_list,x_search").split(",");
+  const schedule = await collectionTimes();
+  // A one-hour catch-up window lets a large source set drain in batches without creating a third run.
+  const window = scheduleWindow(new Date(), schedule, 60);
   // Listings fetched through Jina Reader are paid; development can leave them out.
   const skipJina = process.env.COLLECT_SKIP_JINA === "true";
-  const rows = await sql<{ id: string }[]>`
-    SELECT id FROM sources
+  const rows = await sql<{ id: string; kind: string }[]>`
+    SELECT id, kind FROM sources
     WHERE enabled AND kind IN ${sql(kinds)} AND (next_fetch_at IS NULL OR next_fetch_at <= now()) AND NOT (${sharded()})
       ${skipJina ? sql`AND config::text NOT LIKE '%r.jina.ai%'` : sql``}
     ORDER BY next_fetch_at NULLS FIRST LIMIT ${limit}`;
+  let enqueued = 0;
   for (const r of rows) {
+    // Tender sources follow the two daily Beijing slots. X sources keep their own cadence.
+    if (SCHEDULED_SOURCE_KINDS.has(r.kind) && !window.active) {
+      await sql`UPDATE sources SET next_fetch_at = ${window.next} WHERE id = ${r.id}`;
+      continue;
+    }
     await enqueue(QUEUES.fetchSource, { sourceId: r.id }, { singletonKey: r.id });
     await sql`UPDATE sources SET next_fetch_at = now() + interval '10 minutes' WHERE id = ${r.id}`;
+    enqueued += 1;
   }
   const shards = kinds.includes("x_search") ? await scheduleXShards() : 0;
-  return { enqueued: rows.length, shards };
+  return { enqueued, shards };
+}
+
+/** Manual run for the same tender source set used by the daily schedule. */
+export async function fetchScheduledSourcesNow(limit = Number(process.env.FETCH_SCHEDULE_BATCH || 40)): Promise<{ enqueued: number; startedAt: string }> {
+  const startedAt = new Date().toISOString();
+  const rows = await sql<{ id: string }[]>`
+    SELECT id FROM sources
+    WHERE enabled AND kind IN ('rss', 'web_list', 'json_list')
+    ORDER BY last_fetch_at NULLS FIRST, name
+    LIMIT ${limit}`;
+  for (const r of rows) {
+    await enqueue(QUEUES.fetchSource, { sourceId: r.id, force: true }, { singletonKey: r.id });
+    await sql`UPDATE sources SET next_fetch_at = now() + interval '10 minutes' WHERE id = ${r.id}`;
+  }
+  return { enqueued: rows.length, startedAt };
 }
 
 /**
@@ -365,6 +401,7 @@ export async function adaptIntervals(): Promise<{ updated: number }> {
     FROM sources s WHERE s.enabled AND s.kind IN ('rss', 'web_list', 'json_list', 'x_search')`;
   let updated = 0;
   for (const r of rows) {
+    if (SCHEDULED_SOURCE_KINDS.has(r.kind)) continue;
     const perDay = Number(r.per_day);
     // Editorial sites and feeds are looked at hourly at least (they cost nothing);
     // editorial X and listings read through Jina stop at two hours (paid per call, within their budgets);

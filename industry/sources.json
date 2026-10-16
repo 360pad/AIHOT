@@ -12,15 +12,24 @@
         "linkSelector": "a[href]",
         "titleSelector": "a[href]",
         "publishedAtRegex": "发布时间：\\s*(?:<em[^>]*>)?(\\d{4}-\\d{2}-\\d{2}(?:\\s+\\d{2}:\\d{2})?)",
-        "allowUrlPrefixes": ["https://www.ccgp.gov.cn/cggg/zygg/"],
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "allowUrlPrefixes": [
+          "https://www.ccgp.gov.cn/cggg/zygg/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "政府采购", "中央公告"],
+      "tags": [
+        "官方",
+        "政府采购",
+        "中央公告"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -35,15 +44,23 @@
         "linkSelector": "a[href]",
         "titleSelector": "a[href]",
         "publishedAtSelector": "span",
-        "allowUrlPrefixes": ["https://www.ggzy.gov.cn/information/deal/html/"],
-        "_aihot": { "initialBackfillLimit": 12, "maxAgeDays": 30 }
+        "allowUrlPrefixes": [
+          "https://www.ggzy.gov.cn/information/deal/html/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 12,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": false,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "交易公告"],
+      "tags": [
+        "官方",
+        "交易公告"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -58,15 +75,23 @@
         "linkSelector": "a[href]",
         "titleSelector": "a[href]",
         "publishedAtSelector": "span",
-        "allowUrlPrefixes": ["https://www.ggzy.gov.cn/information/deal/html/"],
-        "_aihot": { "initialBackfillLimit": 12, "maxAgeDays": 30 }
+        "allowUrlPrefixes": [
+          "https://www.ggzy.gov.cn/information/deal/html/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 12,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": false,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "成交公示"],
+      "tags": [
+        "官方",
+        "成交公示"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -81,15 +106,26 @@
         "linkSelector": "a[href]",
         "titleSelector": "a.ewb-notice-data",
         "publishedAtSelector": "span.ewb-notice-date",
-        "allowUrlPrefixes": ["https://ggzy.hefei.gov.cn/jyxx/002001/"],
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "allowUrlPrefixes": [
+          "https://ggzy.hefei.gov.cn/jyxx/002001/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "安徽", "合肥", "公共资源交易", "政府采购"],
+      "tags": [
+        "官方",
+        "安徽",
+        "合肥",
+        "公共资源交易",
+        "政府采购"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -100,19 +136,32 @@
       "config": {
         "url": "https://whsggzy.wuhu.gov.cn/api/Home/GetNoticePage?category=1&pageIndex=1&pageSize=50&startDate=&endDate=&stringCondition=%7B%7D",
         "itemsPath": "Data.Data",
-        "titlePaths": ["Name"],
+        "titlePaths": [
+          "Name"
+        ],
         "publishedAtPath": "Date",
         "urlTemplate": "https://whsggzy.wuhu.gov.cn/whjyzx/contentinfo?id={Id}&menuPath=/trading-info&activeTab={NoticeCategory}",
-        "allowUrlPrefixes": ["https://whsggzy.wuhu.gov.cn/whjyzx/contentinfo"],
+        "allowUrlPrefixes": [
+          "https://whsggzy.wuhu.gov.cn/whjyzx/contentinfo"
+        ],
         "externalIdPath": "Id",
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "安徽", "芜湖", "公共资源交易", "政府采购"],
+      "tags": [
+        "官方",
+        "安徽",
+        "芜湖",
+        "公共资源交易",
+        "政府采购"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -127,15 +176,26 @@
         "linkSelector": "a[href]",
         "titleSelector": "span.txt",
         "publishedAtSelector": "span.date",
-        "allowUrlPrefixes": ["https://ggzy.bengbu.gov.cn/jyxxgk/002001/"],
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "allowUrlPrefixes": [
+          "https://ggzy.bengbu.gov.cn/jyxxgk/002001/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "安徽", "蚌埠", "公共资源交易", "政府采购"],
+      "tags": [
+        "官方",
+        "安徽",
+        "蚌埠",
+        "公共资源交易",
+        "政府采购"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -150,15 +210,26 @@
         "linkSelector": "a[href]",
         "titleSelector": "a[title]",
         "publishedAtSelector": "span.time",
-        "allowUrlPrefixes": ["https://jy.ggj.huainan.gov.cn/jyxx/"],
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "allowUrlPrefixes": [
+          "https://jy.ggj.huainan.gov.cn/jyxx/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "安徽", "淮南", "公共资源交易", "政府采购"],
+      "tags": [
+        "官方",
+        "安徽",
+        "淮南",
+        "公共资源交易",
+        "政府采购"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -172,15 +243,26 @@
         "itemSelector": "ul.card-list li",
         "linkSelector": "a[href]",
         "titleSelector": "p.name",
-        "allowUrlPrefixes": ["https://zbcg.mas.gov.cn/masggzynew/jyxx/"],
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "allowUrlPrefixes": [
+          "https://zbcg.mas.gov.cn/masggzynew/jyxx/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "安徽", "马鞍山", "公共资源交易", "政府采购"],
+      "tags": [
+        "官方",
+        "安徽",
+        "马鞍山",
+        "公共资源交易",
+        "政府采购"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -191,7 +273,9 @@
       "config": {
         "url": "http://www.masygjy.com/XZEpointWebBuilder/rest/secaction/getSecInfoListYzmygjy",
         "method": "POST",
-        "headers": { "user-agent": "Mozilla/5.0" },
+        "headers": {
+          "user-agent": "Mozilla/5.0"
+        },
         "bodyForm": {
           "siteGuid": "3a507ad4-f2ac-473c-845d-e69c560629c1",
           "categoryNum": "001002001",
@@ -204,12 +288,16 @@
           "enddate": ""
         },
         "itemsPath": "custom.infodata",
-        "titlePaths": ["title"],
+        "titlePaths": [
+          "title"
+        ],
         "publishedAtPath": "infodate",
         "publishedAtUtcOffset": "+08:00",
         "externalIdPath": "infoid",
         "urlTemplate": "http://www.masygjy.com{infourl}",
-        "allowUrlPrefixes": ["http://www.masygjy.com/jyxx/001002/001002001/"],
+        "allowUrlPrefixes": [
+          "http://www.masygjy.com/jyxx/001002/001002001/"
+        ],
         "sortByPublishedAt": true,
         "pagination": {
           "location": "bodyForm",
@@ -222,14 +310,23 @@
           "firstImportPages": 4,
           "stopWhenShort": true
         },
-        "_aihot": { "initialBackfillLimit": 72, "maxAgeDays": 30 }
+        "_aihot": {
+          "initialBackfillLimit": 72,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方平台", "安徽", "马鞍山", "公共资源交易", "招标公告"],
+      "tags": [
+        "官方平台",
+        "安徽",
+        "马鞍山",
+        "公共资源交易",
+        "招标公告"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -240,7 +337,9 @@
       "config": {
         "url": "http://www.masygjy.com/XZEpointWebBuilder/rest/secaction/getSecInfoListYzmygjy",
         "method": "POST",
-        "headers": { "user-agent": "Mozilla/5.0" },
+        "headers": {
+          "user-agent": "Mozilla/5.0"
+        },
         "bodyForm": {
           "siteGuid": "3a507ad4-f2ac-473c-845d-e69c560629c1",
           "categoryNum": "001002004",
@@ -253,12 +352,16 @@
           "enddate": ""
         },
         "itemsPath": "custom.infodata",
-        "titlePaths": ["title"],
+        "titlePaths": [
+          "title"
+        ],
         "publishedAtPath": "infodate",
         "publishedAtUtcOffset": "+08:00",
         "externalIdPath": "infoid",
         "urlTemplate": "http://www.masygjy.com{infourl}",
-        "allowUrlPrefixes": ["http://www.masygjy.com/jyxx/001002/001002004/"],
+        "allowUrlPrefixes": [
+          "http://www.masygjy.com/jyxx/001002/001002004/"
+        ],
         "sortByPublishedAt": true,
         "pagination": {
           "location": "bodyForm",
@@ -271,14 +374,23 @@
           "firstImportPages": 4,
           "stopWhenShort": true
         },
-        "_aihot": { "initialBackfillLimit": 72, "maxAgeDays": 30 }
+        "_aihot": {
+          "initialBackfillLimit": 72,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方平台", "安徽", "马鞍山", "公共资源交易", "中标及结果"],
+      "tags": [
+        "官方平台",
+        "安徽",
+        "马鞍山",
+        "公共资源交易",
+        "中标及结果"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -293,15 +405,26 @@
         "linkSelector": "a[href]",
         "titleSelector": "a[href]",
         "publishedAtSelector": "span.ewb-notice-time",
-        "allowUrlPrefixes": ["https://ggzy.huaibei.gov.cn/bussinessInfo/"],
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "allowUrlPrefixes": [
+          "https://ggzy.huaibei.gov.cn/bussinessInfo/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "安徽", "淮北", "公共资源交易", "政府采购"],
+      "tags": [
+        "官方",
+        "安徽",
+        "淮北",
+        "公共资源交易",
+        "政府采购"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -316,15 +439,26 @@
         "linkSelector": "a[href]",
         "titleSelector": "span.content",
         "publishedAtSelector": "span.time",
-        "allowUrlPrefixes": ["https://ggzyjyzx.tl.gov.cn/jyxx/"],
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "allowUrlPrefixes": [
+          "https://ggzyjyzx.tl.gov.cn/jyxx/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "安徽", "铜陵", "公共资源交易", "政府采购"],
+      "tags": [
+        "官方",
+        "安徽",
+        "铜陵",
+        "公共资源交易",
+        "政府采购"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -339,15 +473,26 @@
         "linkSelector": "a[href]",
         "titleSelector": "a.text-overflow.new-item",
         "publishedAtSelector": "span.news-time",
-        "allowUrlPrefixes": ["https://aqggzy.anqing.gov.cn/jyxx/003001/"],
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "allowUrlPrefixes": [
+          "https://aqggzy.anqing.gov.cn/jyxx/003001/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "安徽", "安庆", "公共资源交易", "政府采购"],
+      "tags": [
+        "官方",
+        "安徽",
+        "安庆",
+        "公共资源交易",
+        "政府采购"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -362,15 +507,26 @@
         "linkSelector": "a[href]",
         "titleSelector": "a[href]",
         "publishedAtSelector": "span.wb-data-date",
-        "allowUrlPrefixes": ["https://ggzy.huangshan.gov.cn/017/"],
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "allowUrlPrefixes": [
+          "https://ggzy.huangshan.gov.cn/017/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "安徽", "黄山", "公共资源交易", "政府采购"],
+      "tags": [
+        "官方",
+        "安徽",
+        "黄山",
+        "公共资源交易",
+        "政府采购"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -385,15 +541,26 @@
         "linkSelector": "a[href]",
         "titleSelector": "a[href]",
         "publishedAtSelector": "span.ewb-notice-time",
-        "allowUrlPrefixes": ["https://ggzy.chuzhou.gov.cn/bussinessInfo/"],
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "allowUrlPrefixes": [
+          "https://ggzy.chuzhou.gov.cn/bussinessInfo/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "安徽", "滁州", "公共资源交易", "政府采购"],
+      "tags": [
+        "官方",
+        "安徽",
+        "滁州",
+        "公共资源交易",
+        "政府采购"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -408,15 +575,26 @@
         "linkSelector": "a[href]",
         "titleSelector": "span.title",
         "publishedAtSelector": "span.date",
-        "allowUrlPrefixes": ["https://jyzx.fy.gov.cn/fuyang/jyxx/"],
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "allowUrlPrefixes": [
+          "https://jyzx.fy.gov.cn/fuyang/jyxx/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "安徽", "阜阳", "公共资源交易", "政府采购"],
+      "tags": [
+        "官方",
+        "安徽",
+        "阜阳",
+        "公共资源交易",
+        "政府采购"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -431,15 +609,26 @@
         "linkSelector": "a[href]",
         "titleSelector": "p.name",
         "publishedAtSelector": "span.date",
-        "allowUrlPrefixes": ["https://ggzyjy.ahsz.gov.cn/jyxx/"],
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "allowUrlPrefixes": [
+          "https://ggzyjy.ahsz.gov.cn/jyxx/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "安徽", "宿州", "公共资源交易", "政府采购"],
+      "tags": [
+        "官方",
+        "安徽",
+        "宿州",
+        "公共资源交易",
+        "政府采购"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -454,15 +643,26 @@
         "linkSelector": "a[href]",
         "titleSelector": "a.ewb-col-infor",
         "publishedAtSelector": "span.ewb-col-date",
-        "allowUrlPrefixes": ["https://ggzy.luan.gov.cn/jyxxparentDetail.html"],
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "allowUrlPrefixes": [
+          "https://ggzy.luan.gov.cn/jyxxparentDetail.html"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "安徽", "六安", "公共资源交易", "政府采购"],
+      "tags": [
+        "官方",
+        "安徽",
+        "六安",
+        "公共资源交易",
+        "政府采购"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -477,15 +677,26 @@
         "linkSelector": "a[href]",
         "titleSelector": "a.deal-list-txt",
         "publishedAtSelector": "span.deal-list-date",
-        "allowUrlPrefixes": ["https://ggzy.bozhou.gov.cn/jyxx/"],
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "allowUrlPrefixes": [
+          "https://ggzy.bozhou.gov.cn/jyxx/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "安徽", "亳州", "公共资源交易", "政府采购"],
+      "tags": [
+        "官方",
+        "安徽",
+        "亳州",
+        "公共资源交易",
+        "政府采购"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -499,15 +710,26 @@
         "itemSelector": "li",
         "linkSelector": "a[href]",
         "titleSelector": "a[href]",
-        "allowUrlPrefixes": ["https://ggzyj.chizhou.gov.cn/Content/show/"],
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "allowUrlPrefixes": [
+          "https://ggzyj.chizhou.gov.cn/Content/show/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "安徽", "池州", "公共资源交易", "政府采购"],
+      "tags": [
+        "官方",
+        "安徽",
+        "池州",
+        "公共资源交易",
+        "政府采购"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -522,15 +744,26 @@
         "linkSelector": "a[href]",
         "titleSelector": "a.title",
         "publishedAtSelector": "span.date",
-        "allowUrlPrefixes": ["https://ggzyjy.xuancheng.gov.cn/xcspfront/"],
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "allowUrlPrefixes": [
+          "https://ggzyjy.xuancheng.gov.cn/xcspfront/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "安徽", "宣城", "公共资源交易", "政府采购"],
+      "tags": [
+        "官方",
+        "安徽",
+        "宣城",
+        "公共资源交易",
+        "政府采购"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -545,15 +778,25 @@
         "linkSelector": "a[href*=\"/jiangsu/js_cggg/details.html\"]",
         "titleSelector": "a[href*=\"/jiangsu/js_cggg/details.html\"]",
         "publishedAtSelector": "td:last-child",
-        "allowUrlPrefixes": ["http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"],
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "allowUrlPrefixes": [
+          "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "江苏", "政府采购", "采购公告"],
+      "tags": [
+        "官方",
+        "江苏",
+        "政府采购",
+        "采购公告"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -568,15 +811,26 @@
         "linkSelector": "a[href*=\"/site/trade/affiche/detail/\"]",
         "titleSelector": "a[href*=\"/site/trade/affiche/detail/\"]",
         "publishedAtSelector": "span.fr",
-        "allowUrlPrefixes": ["https://www.ahtba.org.cn/site/trade/affiche/detail/"],
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "allowUrlPrefixes": [
+          "https://www.ahtba.org.cn/site/trade/affiche/detail/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1_5",
       "first_party": false,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方协会", "安徽", "招标采购", "政府采购", "公共资源交易"],
+      "tags": [
+        "官方协会",
+        "安徽",
+        "招标采购",
+        "政府采购",
+        "公共资源交易"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -587,23 +841,39 @@
       "config": {
         "url": "http://www.ccgp-jiangsu.gov.cn/jscms/js_lmapi/api/getArticeData/lists/cgyx_2",
         "itemsPath": "result",
-        "titlePaths": ["title"],
-        "summaryPaths": ["summary"],
-        "authorPaths": ["buyerName"],
+        "titlePaths": [
+          "title"
+        ],
+        "summaryPaths": [
+          "summary"
+        ],
+        "authorPaths": [
+          "buyerName"
+        ],
         "publishedAtPath": "publishDate",
         "publishedAtUtcOffset": "+08:00",
         "externalIdPath": "id",
         "urlTemplate": "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html?gglb={ggCode}&ggid={id}",
-        "allowUrlPrefixes": ["http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"],
+        "allowUrlPrefixes": [
+          "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"
+        ],
         "sortByPublishedAt": true,
-        "_aihot": { "initialBackfillLimit": 30, "maxAgeDays": 30 }
+        "_aihot": {
+          "initialBackfillLimit": 30,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "江苏", "政府采购", "采购意向"],
+      "tags": [
+        "官方",
+        "江苏",
+        "政府采购",
+        "采购意向"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -614,23 +884,39 @@
       "config": {
         "url": "http://www.ccgp-jiangsu.gov.cn/jscms/js_lmapi/api/getArticeData/lists/cggg_2",
         "itemsPath": "result",
-        "titlePaths": ["title"],
-        "summaryPaths": ["summary"],
-        "authorPaths": ["buyerName"],
+        "titlePaths": [
+          "title"
+        ],
+        "summaryPaths": [
+          "summary"
+        ],
+        "authorPaths": [
+          "buyerName"
+        ],
         "publishedAtPath": "publishDate",
         "publishedAtUtcOffset": "+08:00",
         "externalIdPath": "id",
         "urlTemplate": "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html?gglb={ggCode}&ggid={id}",
-        "allowUrlPrefixes": ["http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"],
+        "allowUrlPrefixes": [
+          "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"
+        ],
         "sortByPublishedAt": true,
-        "_aihot": { "initialBackfillLimit": 30, "maxAgeDays": 30 }
+        "_aihot": {
+          "initialBackfillLimit": 30,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "江苏", "政府采购", "招标公告"],
+      "tags": [
+        "官方",
+        "江苏",
+        "政府采购",
+        "招标公告"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -641,23 +927,39 @@
       "config": {
         "url": "http://www.ccgp-jiangsu.gov.cn/jscms/js_lmapi/api/getArticeData/lists/z_jggg_2",
         "itemsPath": "result",
-        "titlePaths": ["title"],
-        "summaryPaths": ["summary"],
-        "authorPaths": ["buyerName"],
+        "titlePaths": [
+          "title"
+        ],
+        "summaryPaths": [
+          "summary"
+        ],
+        "authorPaths": [
+          "buyerName"
+        ],
         "publishedAtPath": "publishDate",
         "publishedAtUtcOffset": "+08:00",
         "externalIdPath": "id",
         "urlTemplate": "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html?gglb={ggCode}&ggid={id}",
-        "allowUrlPrefixes": ["http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"],
+        "allowUrlPrefixes": [
+          "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"
+        ],
         "sortByPublishedAt": true,
-        "_aihot": { "initialBackfillLimit": 30, "maxAgeDays": 30 }
+        "_aihot": {
+          "initialBackfillLimit": 30,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "江苏", "政府采购", "中标及结果"],
+      "tags": [
+        "官方",
+        "江苏",
+        "政府采购",
+        "中标及结果"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -668,23 +970,40 @@
       "config": {
         "url": "http://www.ccgp-jiangsu.gov.cn/jscms/js_lmapi/api/getArticeData/lists/cgyx_3",
         "itemsPath": "result",
-        "titlePaths": ["title"],
-        "summaryPaths": ["summary"],
-        "authorPaths": ["buyerName"],
+        "titlePaths": [
+          "title"
+        ],
+        "summaryPaths": [
+          "summary"
+        ],
+        "authorPaths": [
+          "buyerName"
+        ],
         "publishedAtPath": "publishDate",
         "publishedAtUtcOffset": "+08:00",
         "externalIdPath": "id",
         "urlTemplate": "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html?gglb={ggCode}&ggid={id}",
-        "allowUrlPrefixes": ["http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"],
+        "allowUrlPrefixes": [
+          "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"
+        ],
         "sortByPublishedAt": true,
-        "_aihot": { "initialBackfillLimit": 30, "maxAgeDays": 30 }
+        "_aihot": {
+          "initialBackfillLimit": 30,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "江苏", "市级", "政府采购", "采购意向"],
+      "tags": [
+        "官方",
+        "江苏",
+        "市级",
+        "政府采购",
+        "采购意向"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -695,23 +1014,40 @@
       "config": {
         "url": "http://www.ccgp-jiangsu.gov.cn/jscms/js_lmapi/api/getArticeData/lists/cgyx_4",
         "itemsPath": "result",
-        "titlePaths": ["title"],
-        "summaryPaths": ["summary"],
-        "authorPaths": ["buyerName"],
+        "titlePaths": [
+          "title"
+        ],
+        "summaryPaths": [
+          "summary"
+        ],
+        "authorPaths": [
+          "buyerName"
+        ],
         "publishedAtPath": "publishDate",
         "publishedAtUtcOffset": "+08:00",
         "externalIdPath": "id",
         "urlTemplate": "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html?gglb={ggCode}&ggid={id}",
-        "allowUrlPrefixes": ["http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"],
+        "allowUrlPrefixes": [
+          "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"
+        ],
         "sortByPublishedAt": true,
-        "_aihot": { "initialBackfillLimit": 30, "maxAgeDays": 30 }
+        "_aihot": {
+          "initialBackfillLimit": 30,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "江苏", "县级", "政府采购", "采购意向"],
+      "tags": [
+        "官方",
+        "江苏",
+        "县级",
+        "政府采购",
+        "采购意向"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -722,23 +1058,40 @@
       "config": {
         "url": "http://www.ccgp-jiangsu.gov.cn/jscms/js_lmapi/api/getArticeData/lists/cggg_3",
         "itemsPath": "result",
-        "titlePaths": ["title"],
-        "summaryPaths": ["summary"],
-        "authorPaths": ["buyerName"],
+        "titlePaths": [
+          "title"
+        ],
+        "summaryPaths": [
+          "summary"
+        ],
+        "authorPaths": [
+          "buyerName"
+        ],
         "publishedAtPath": "publishDate",
         "publishedAtUtcOffset": "+08:00",
         "externalIdPath": "id",
         "urlTemplate": "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html?gglb={ggCode}&ggid={id}",
-        "allowUrlPrefixes": ["http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"],
+        "allowUrlPrefixes": [
+          "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"
+        ],
         "sortByPublishedAt": true,
-        "_aihot": { "initialBackfillLimit": 30, "maxAgeDays": 30 }
+        "_aihot": {
+          "initialBackfillLimit": 30,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "江苏", "市级", "政府采购", "招标公告"],
+      "tags": [
+        "官方",
+        "江苏",
+        "市级",
+        "政府采购",
+        "招标公告"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -749,23 +1102,40 @@
       "config": {
         "url": "http://www.ccgp-jiangsu.gov.cn/jscms/js_lmapi/api/getArticeData/lists/cggg_4",
         "itemsPath": "result",
-        "titlePaths": ["title"],
-        "summaryPaths": ["summary"],
-        "authorPaths": ["buyerName"],
+        "titlePaths": [
+          "title"
+        ],
+        "summaryPaths": [
+          "summary"
+        ],
+        "authorPaths": [
+          "buyerName"
+        ],
         "publishedAtPath": "publishDate",
         "publishedAtUtcOffset": "+08:00",
         "externalIdPath": "id",
         "urlTemplate": "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html?gglb={ggCode}&ggid={id}",
-        "allowUrlPrefixes": ["http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"],
+        "allowUrlPrefixes": [
+          "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"
+        ],
         "sortByPublishedAt": true,
-        "_aihot": { "initialBackfillLimit": 30, "maxAgeDays": 30 }
+        "_aihot": {
+          "initialBackfillLimit": 30,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "江苏", "县级", "政府采购", "招标公告"],
+      "tags": [
+        "官方",
+        "江苏",
+        "县级",
+        "政府采购",
+        "招标公告"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -776,23 +1146,40 @@
       "config": {
         "url": "http://www.ccgp-jiangsu.gov.cn/jscms/js_lmapi/api/getArticeData/lists/z_jggg_3",
         "itemsPath": "result",
-        "titlePaths": ["title"],
-        "summaryPaths": ["summary"],
-        "authorPaths": ["buyerName"],
+        "titlePaths": [
+          "title"
+        ],
+        "summaryPaths": [
+          "summary"
+        ],
+        "authorPaths": [
+          "buyerName"
+        ],
         "publishedAtPath": "publishDate",
         "publishedAtUtcOffset": "+08:00",
         "externalIdPath": "id",
         "urlTemplate": "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html?gglb={ggCode}&ggid={id}",
-        "allowUrlPrefixes": ["http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"],
+        "allowUrlPrefixes": [
+          "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"
+        ],
         "sortByPublishedAt": true,
-        "_aihot": { "initialBackfillLimit": 30, "maxAgeDays": 30 }
+        "_aihot": {
+          "initialBackfillLimit": 30,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "江苏", "市级", "政府采购", "中标及结果"],
+      "tags": [
+        "官方",
+        "江苏",
+        "市级",
+        "政府采购",
+        "中标及结果"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -803,23 +1190,40 @@
       "config": {
         "url": "http://www.ccgp-jiangsu.gov.cn/jscms/js_lmapi/api/getArticeData/lists/z_jggg_4",
         "itemsPath": "result",
-        "titlePaths": ["title"],
-        "summaryPaths": ["summary"],
-        "authorPaths": ["buyerName"],
+        "titlePaths": [
+          "title"
+        ],
+        "summaryPaths": [
+          "summary"
+        ],
+        "authorPaths": [
+          "buyerName"
+        ],
         "publishedAtPath": "publishDate",
         "publishedAtUtcOffset": "+08:00",
         "externalIdPath": "id",
         "urlTemplate": "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html?gglb={ggCode}&ggid={id}",
-        "allowUrlPrefixes": ["http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"],
+        "allowUrlPrefixes": [
+          "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"
+        ],
         "sortByPublishedAt": true,
-        "_aihot": { "initialBackfillLimit": 30, "maxAgeDays": 30 }
+        "_aihot": {
+          "initialBackfillLimit": 30,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "江苏", "县级", "政府采购", "中标及结果"],
+      "tags": [
+        "官方",
+        "江苏",
+        "县级",
+        "政府采购",
+        "中标及结果"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -830,22 +1234,32 @@
       "config": {
         "url": "https://www.ccgp-anhui.gov.cn/portal/category",
         "method": "POST",
-        "headers": { "x-requested-with": "XMLHttpRequest" },
+        "headers": {
+          "x-requested-with": "XMLHttpRequest"
+        },
         "bodyJson": {
           "pageNo": 1,
           "pageSize": 100,
           "categoryCode": "ZcyAnnouncement1",
-          "districtCode": ["340000"],
+          "districtCode": [
+            "340000"
+          ],
           "leaf": "0"
         },
         "itemsPath": "result.data.data",
-        "titlePaths": ["title"],
-        "authorPaths": ["author"],
+        "titlePaths": [
+          "title"
+        ],
+        "authorPaths": [
+          "author"
+        ],
         "publishedAtPath": "publishDate",
         "publishedAtUnit": "epoch_ms",
         "externalIdPath": "articleId",
         "urlTemplate": "https://www.ccgp-anhui.gov.cn/site/detail?parentId=oJCosldFbaJFzmyFhz1c6Q%3D%3D&articleId={articleId}",
-        "allowUrlPrefixes": ["https://www.ccgp-anhui.gov.cn/site/detail"],
+        "allowUrlPrefixes": [
+          "https://www.ccgp-anhui.gov.cn/site/detail"
+        ],
         "sortByPublishedAt": true,
         "pagination": {
           "location": "bodyJson",
@@ -858,14 +1272,22 @@
           "firstImportPages": 15,
           "stopWhenShort": true
         },
-        "_aihot": { "initialBackfillLimit": 100, "maxAgeDays": 30 }
+        "_aihot": {
+          "initialBackfillLimit": 100,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "安徽", "政府采购", "采购意向"],
+      "tags": [
+        "官方",
+        "安徽",
+        "政府采购",
+        "采购意向"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -876,22 +1298,32 @@
       "config": {
         "url": "https://www.ccgp-anhui.gov.cn/portal/category",
         "method": "POST",
-        "headers": { "x-requested-with": "XMLHttpRequest" },
+        "headers": {
+          "x-requested-with": "XMLHttpRequest"
+        },
         "bodyJson": {
           "pageNo": 1,
           "pageSize": 100,
           "categoryCode": "ZcyAnnouncement2",
-          "districtCode": ["340000"],
+          "districtCode": [
+            "340000"
+          ],
           "leaf": "0"
         },
         "itemsPath": "result.data.data",
-        "titlePaths": ["title"],
-        "authorPaths": ["author"],
+        "titlePaths": [
+          "title"
+        ],
+        "authorPaths": [
+          "author"
+        ],
         "publishedAtPath": "publishDate",
         "publishedAtUnit": "epoch_ms",
         "externalIdPath": "articleId",
         "urlTemplate": "https://www.ccgp-anhui.gov.cn/site/detail?parentId=oJCosldFbaJFzmyFhz1c6Q%3D%3D&articleId={articleId}",
-        "allowUrlPrefixes": ["https://www.ccgp-anhui.gov.cn/site/detail"],
+        "allowUrlPrefixes": [
+          "https://www.ccgp-anhui.gov.cn/site/detail"
+        ],
         "sortByPublishedAt": true,
         "pagination": {
           "location": "bodyJson",
@@ -904,14 +1336,22 @@
           "firstImportPages": 15,
           "stopWhenShort": true
         },
-        "_aihot": { "initialBackfillLimit": 100, "maxAgeDays": 30 }
+        "_aihot": {
+          "initialBackfillLimit": 100,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "安徽", "政府采购", "采购公告"],
+      "tags": [
+        "官方",
+        "安徽",
+        "政府采购",
+        "采购公告"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     },
@@ -929,16 +1369,1215 @@
         "titleSelector": "a[title]",
         "publishedAtSelector": "span",
         "publishedAtUtcOffset": "+08:00",
-        "allowUrlPrefixes": ["https://sky.jswater.org.cn/slkxy/slzt/tzgg/art/"],
+        "allowUrlPrefixes": [
+          "https://sky.jswater.org.cn/slkxy/slzt/tzgg/art/"
+        ],
         "sortByPublishedAt": true,
-        "_aihot": { "initialBackfillLimit": 20, "maxAgeDays": 30 }
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 60,
-      "tags": ["官方", "江苏", "水利", "通知公告"],
+      "tags": [
+        "官方",
+        "江苏",
+        "水利",
+        "通知公告"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "web-mas-government-notices",
+      "name": "马鞍山市政府·政务要闻",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.mas.gov.cn/zxzx/zwyw/index.html",
+        "baseUrl": "https://www.mas.gov.cn/zxzx/zwyw/index.html",
+        "itemSelector": "li.odd, li.even",
+        "linkSelector": "a[href*='/zxzx/zwyw/']",
+        "titleSelector": "a[href*='/zxzx/zwyw/']",
+        "allowUrlPrefixes": [
+          "https://www.mas.gov.cn/zxzx/zwyw/"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "官方",
+        "安徽",
+        "马鞍山",
+        "政务要闻"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-mas-water-notices",
+      "name": "马鞍山市水利局·通知公告",
+      "kind": "web_list",
+      "config": {
+        "url": "https://slj.mas.gov.cn/xwdt/tzgg/index.html",
+        "baseUrl": "https://slj.mas.gov.cn/xwdt/tzgg/index.html",
+        "itemSelector": "li.odd, li.even",
+        "linkSelector": "a.left",
+        "titleSelector": "a.left",
+        "allowUrlPrefixes": [
+          "https://slj.mas.gov.cn/xwdt/tzgg/"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "官方",
+        "安徽",
+        "马鞍山",
+        "水利",
+        "通知公告"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-anhui-yangtze-sand-notices",
+      "name": "安徽省长江河道管理局·通知公告",
+      "kind": "web_list",
+      "config": {
+        "url": "https://slt.ah.gov.cn/tsdw/zjhdglj/tzgg/index.html",
+        "baseUrl": "https://slt.ah.gov.cn/tsdw/zjhdglj/tzgg/index.html",
+        "itemSelector": "li.odd, li.even",
+        "linkSelector": "a.left",
+        "titleSelector": "a.left",
+        "allowUrlPrefixes": [
+          "https://slt.ah.gov.cn/tsdw/zjhdglj/tzgg/"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "官方",
+        "安徽",
+        "长江河道",
+        "水利"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-mashsq-notices",
+      "name": "马鞍山市花山区·公示公告",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.mashsq.gov.cn/xwzx/gsgg/index.html",
+        "baseUrl": "https://www.mashsq.gov.cn/xwzx/gsgg/index.html",
+        "itemSelector": "li.odd, li.even",
+        "linkSelector": "a[href*='/xwzx/gsgg/']",
+        "titleSelector": "a[href*='/xwzx/gsgg/']",
+        "allowUrlPrefixes": [
+          "https://www.mashsq.gov.cn/xwzx/gsgg/"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "官方",
+        "安徽",
+        "马鞍山",
+        "花山",
+        "公示公告"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-masys-notices",
+      "name": "马鞍山市雨山区·公告公示",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.masys.gov.cn/xwdt/tzgg/index.html",
+        "baseUrl": "https://www.masys.gov.cn/xwdt/tzgg/index.html",
+        "itemSelector": "li.odd, li.even",
+        "linkSelector": "a[href*='/xwdt/tzgg/']",
+        "titleSelector": "a[href*='/xwdt/tzgg/']",
+        "allowUrlPrefixes": [
+          "https://www.masys.gov.cn/xwdt/tzgg/"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "官方",
+        "安徽",
+        "马鞍山",
+        "雨山",
+        "公告公示"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-mas-emergency-notices",
+      "name": "马鞍山市应急管理局·通知公告",
+      "kind": "web_list",
+      "config": {
+        "url": "https://safety.mas.gov.cn/xwzx/tzgg/index.html",
+        "baseUrl": "https://safety.mas.gov.cn/xwzx/tzgg/index.html",
+        "itemSelector": "li.odd, li.even",
+        "linkSelector": "a[href*='/xwzx/tzgg/']",
+        "titleSelector": "a[href*='/xwzx/tzgg/']",
+        "allowUrlPrefixes": [
+          "https://safety.mas.gov.cn/xwzx/tzgg/"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "官方",
+        "安徽",
+        "马鞍山",
+        "应急",
+        "通知公告"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-masxmzx-notices",
+      "name": "安徽兴马项目咨询·通知公告",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.masxmzx.com/tzgg/list.html",
+        "baseUrl": "https://www.masxmzx.com/tzgg/list.html",
+        "itemSelector": "li.list-item",
+        "linkSelector": "a[href*=\"/tzgg/\"]",
+        "titleSelector": "a[href*=\"/tzgg/\"]",
+        "allowUrlPrefixes": [
+          "https://www.masxmzx.com/tzgg/"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "企业",
+        "安徽",
+        "马鞍山",
+        "项目咨询"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-masjc-notices",
+      "name": "马鞍山金诚会计师事务所·公示公告",
+      "kind": "web_list",
+      "config": {
+        "url": "http://www.masjc.com/info/3424.html",
+        "baseUrl": "http://www.masjc.com/info/3424.html",
+        "itemSelector": "dt",
+        "linkSelector": "a[href*=\"/display/\"]",
+        "titleSelector": "a[href*=\"/display/\"]",
+        "allowUrlPrefixes": [
+          "http://www.masjc.com/display/"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "企业",
+        "安徽",
+        "马鞍山",
+        "招标代理"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-huaihe-water-notices",
+      "name": "安徽省淮河河道管理局·信息公开",
+      "kind": "web_list",
+      "config": {
+        "url": "https://slt.ah.gov.cn/tsdw/shhhdglj/index.html",
+        "baseUrl": "https://slt.ah.gov.cn/tsdw/shhhdglj/index.html",
+        "itemSelector": "li.odd, li.even",
+        "linkSelector": "a[href*=\"/tsdw/shhhdglj/\"]",
+        "titleSelector": "a[href*=\"/tsdw/shhhdglj/\"]",
+        "allowUrlPrefixes": [
+          "https://slt.ah.gov.cn/tsdw/shhhdglj/"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "官方",
+        "安徽",
+        "淮河",
+        "水利"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-hebei-ggzy-notices",
+      "name": "河北省公共资源交易中心·通知公告",
+      "kind": "web_list",
+      "config": {
+        "url": "http://www.hebpr.gov.cn/hbggfwpt/",
+        "baseUrl": "http://www.hebpr.gov.cn/hbggfwpt/",
+        "itemSelector": "div.ewb-notice-block",
+        "linkSelector": "a[href*=\"/hbggfwpt/tzgg/\"]",
+        "titleSelector": "a[href*=\"/hbggfwpt/tzgg/\"]",
+        "allowUrlPrefixes": [
+          "http://www.hebpr.gov.cn/hbggfwpt/tzgg/"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "官方",
+        "河北",
+        "公共资源交易"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-zhejiang-ggzy-tenders",
+      "name": "浙江省公共资源交易服务平台·招标公告",
+      "kind": "web_list",
+      "config": {
+        "url": "https://ggzy.zj.gov.cn/",
+        "baseUrl": "https://ggzy.zj.gov.cn/",
+        "itemSelector": "li.list-view-cell",
+        "linkSelector": "a[href*='/jyxxgk/002001/002001001/']",
+        "titleSelector": "a[href*='/jyxxgk/002001/002001001/']",
+        "allowUrlPrefixes": [
+          "https://ggzy.zj.gov.cn/jyxxgk/002001/002001001/"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "官方",
+        "浙江",
+        "公共资源交易",
+        "招标公告"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-jdkgjt-tenders",
+      "name": "江东控股集团·招标采购",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.jdkgjt.com.cn/info?menuId=20",
+        "baseUrl": "https://www.jdkgjt.com.cn/info?menuId=20",
+        "itemSelector": "div.item-title",
+        "linkSelector": "a[href*='inviteDetail']",
+        "titleSelector": "a[href*='inviteDetail']",
+        "allowUrlPrefixes": [
+          "https://www.jdkgjt.com.cn/inviteDetail"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "国企",
+        "安徽",
+        "马鞍山",
+        "招标采购"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-cjhdj-news",
+      "name": "长江航道局·航道建设动态",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.cjhdj.com.cn/",
+        "baseUrl": "https://www.cjhdj.com.cn/",
+        "itemSelector": "li",
+        "linkSelector": "a[href*=\"202\"]",
+        "titleSelector": "a[href*=\"202\"]",
+        "allowUrlPrefixes": [
+          "https://www.cjhdj.com.cn/xwzx/"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "官方",
+        "交通水运",
+        "长江航道"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-henan-ccgp-notices",
+      "name": "河南省政府采购网·采购公告",
+      "kind": "web_list",
+      "config": {
+        "url": "https://zfcg.henan.gov.cn/henan/list2?pageNo=1&pageSize=16&gglx=2&bz=0",
+        "baseUrl": "https://zfcg.henan.gov.cn/henan/list2?pageNo=1&pageSize=16&gglx=2&bz=0",
+        "itemSelector": "a[href*='/henan/content?']",
+        "linkSelector": "a[href*='/henan/content?']",
+        "titleSelector": "a[href*='/henan/content?']",
+        "allowUrlPrefixes": [
+          "https://zfcg.henan.gov.cn/henan/content?"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "官方",
+        "河南",
+        "政府采购"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-huaian-ggzy-pending",
+      "name": "淮安市公共资源交易中心·采购公告",
+      "kind": "json_list",
+      "config": {
+        "url": "https://ggzy.huaian.gov.cn/inteligentsearch/rest/esinteligentsearch/getFullTextDataNew",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "Mozilla/5.0"
+        },
+        "bodyJson": {
+          "token": "",
+          "pn": 0,
+          "rn": 100,
+          "sdt": "",
+          "edt": "",
+          "wd": "",
+          "inc_wd": "",
+          "exc_wd": "",
+          "fields": "title",
+          "cnum": "001",
+          "sort": "{\"webdate\":\"0\"}",
+          "ssort": "title",
+          "cl": 500,
+          "terminal": "",
+          "condition": [
+            {
+              "fieldName": "categorynum",
+              "equal": "001004001",
+              "notEqual": null,
+              "equalList": null,
+              "notEqualList": null,
+              "isLike": true,
+              "likeType": 2
+            }
+          ],
+          "time": null,
+          "highlights": "title",
+          "statistics": null,
+          "unionCondition": null,
+          "accuracy": "",
+          "noParticiple": "1",
+          "searchRange": null,
+          "isBusiness": "1"
+        },
+        "itemsPath": "result.records",
+        "titlePaths": [
+          "customtitle",
+          "title"
+        ],
+        "summaryPaths": [
+          "content"
+        ],
+        "summaryIsBody": true,
+        "publishedAtPath": "webdate",
+        "publishedAtUtcOffset": "+08:00",
+        "externalIdPath": "id",
+        "urlTemplate": "https://ggzy.huaian.gov.cn{linkurl}",
+        "allowUrlPrefixes": [
+          "https://ggzy.huaian.gov.cn/jyxx/001004/001004001/"
+        ],
+        "sortByPublishedAt": true,
+        "pagination": {
+          "location": "bodyJson",
+          "pageParam": "pn",
+          "sizeParam": "rn",
+          "pageSize": 100,
+          "start": 0,
+          "step": 100,
+          "pages": 1,
+          "firstImportPages": 2,
+          "stopWhenShort": true
+        },
+        "_aihot": {
+          "initialBackfillLimit": 100,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "官方",
+        "江苏",
+        "淮安",
+        "政府采购",
+        "JSON接口"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-nanjing-procurement-pending",
+      "name": "南京公共采购信息网（待适配）",
+      "kind": "web_list",
+      "config": {
+        "url": "https://njgc.jfh.com/purchase?menuActiveIndex=8",
+        "baseUrl": "https://njgc.jfh.com/purchase?menuActiveIndex=8",
+        "itemSelector": "li",
+        "linkSelector": "a[href]",
+        "titleSelector": "a[href]",
+        "allowUrlPrefixes": [
+          "https://njgc.jfh.com/purchase?menuActiveIndex=8"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "官方",
+        "江苏",
+        "南京",
+        "待适配",
+        "连接超时"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": false
+    },
+    {
+      "id": "web-nanjing-water-pending",
+      "name": "南京市水务局·招标公告（WAF待处理）",
+      "kind": "web_list",
+      "config": {
+        "url": "https://shuiwu.nanjing.gov.cn/zbxx/zbgg/",
+        "baseUrl": "https://shuiwu.nanjing.gov.cn/zbxx/zbgg/",
+        "itemSelector": "li",
+        "linkSelector": "a[href]",
+        "titleSelector": "a[href]",
+        "allowUrlPrefixes": [
+          "https://shuiwu.nanjing.gov.cn/zbxx/zbgg/"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "官方",
+        "江苏",
+        "南京",
+        "水务",
+        "待适配",
+        "WAF拦截"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": false
+    },
+    {
+      "id": "web-ouyeel-pending",
+      "name": "欧冶平台（待适配）",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.ouyeelbuy.com/?tdsourcetag=s_pctim_aiomsg",
+        "baseUrl": "https://www.ouyeelbuy.com/?tdsourcetag=s_pctim_aiomsg",
+        "itemSelector": "li",
+        "linkSelector": "a[href]",
+        "titleSelector": "a[href]",
+        "allowUrlPrefixes": [
+          "https://www.ouyeelbuy.com/?tdsourcetag=s_pctim_aiomsg"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "交易平台",
+        "待适配",
+        "连接超时"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": false
+    },
+    {
+      "id": "web-zhejiang-procurement-pending",
+      "name": "浙江政府采购网·采购项目公告",
+      "kind": "json_list",
+      "config": {
+        "url": "https://zfcg.czt.zj.gov.cn/portal/searchHome",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "Mozilla/5.0"
+        },
+        "bodyJson": {
+          "code": "110-606633",
+          "subCodes": [
+            "110-306476",
+            "110-684034",
+            "110-511933"
+          ],
+          "districtCode": null,
+          "needNewCnt": true,
+          "needValidCount": true,
+          "needTotal": true,
+          "pageSize": 20,
+          "isStick": false
+        },
+        "itemsPath": "result.data.children",
+        "titlePaths": [
+          "title"
+        ],
+        "summaryPaths": [
+          "purchaseName"
+        ],
+        "publishedAtPath": "pubDate",
+        "publishedAtUnit": "epoch_ms",
+        "externalIdPath": "articleId",
+        "urlTemplate": "https://zfcg.czt.zj.gov.cn/site/detail?parentId=600007&articleId={articleId}",
+        "allowUrlPrefixes": [
+          "https://zfcg.czt.zj.gov.cn/site/detail?"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 100,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "官方",
+        "浙江",
+        "政府采购",
+        "采购项目公告",
+        "JSON接口"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-anhui-shuangying-pending",
+      "name": "安徽双赢招投标网·招标公告",
+      "kind": "json_list",
+      "config": {
+        "url": "https://ahsy.etrading.cn/inteligentsearch_wz/rest/esinteligentsearch/getFullTextDataNew",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "Mozilla/5.0"
+        },
+        "bodyJson": {
+          "token": "",
+          "pn": 0,
+          "rn": 20,
+          "sdt": "",
+          "edt": "",
+          "wd": "",
+          "inc_wd": "",
+          "exc_wd": "",
+          "fields": "title;infod",
+          "cnum": "002",
+          "sort": "{webdate:0}",
+          "ssort": "title",
+          "cl": 500,
+          "terminal": "",
+          "condition": [
+            {
+              "equal": "安徽双赢",
+              "fieldName": "infod",
+              "isLike": "true",
+              "likeType": "2"
+            }
+          ],
+          "time": null,
+          "highlights": "title;content",
+          "statistics": null,
+          "unionCondition": null,
+          "accuracy": "",
+          "noParticiple": "",
+          "searchRange": null,
+          "isBusiness": "1"
+        },
+        "jsonTextPath": "content",
+        "itemsPath": "result.records",
+        "titlePaths": [
+          "customtitle",
+          "title"
+        ],
+        "summaryPaths": [
+          "content"
+        ],
+        "summaryIsBody": true,
+        "publishedAtPath": "webdate",
+        "publishedAtUtcOffset": "+08:00",
+        "externalIdPath": "id",
+        "urlTemplate": "https://ahsy.etrading.cn{linkurl}",
+        "allowUrlPrefixes": [
+          "https://ahsy.etrading.cn/jyxx/"
+        ],
+        "sortByPublishedAt": true,
+        "pagination": {
+          "location": "bodyJson",
+          "pageParam": "pn",
+          "sizeParam": "rn",
+          "pageSize": 20,
+          "start": 0,
+          "step": 20,
+          "pages": 1,
+          "firstImportPages": 2,
+          "stopWhenShort": true
+        },
+        "_aihot": {
+          "initialBackfillLimit": 100,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "交易平台",
+        "安徽",
+        "安徽双赢",
+        "新点平台接口"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-yonghan-etrading-pending",
+      "name": "新点交易·永涵·交易公告",
+      "kind": "json_list",
+      "config": {
+        "url": "https://yonghan.etrading.cn/inteligentsearch_wz/rest/esinteligentsearch/getFullTextDataNew",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "Mozilla/5.0"
+        },
+        "bodyJson": {
+          "token": "",
+          "pn": 0,
+          "rn": 20,
+          "sdt": "",
+          "edt": "",
+          "wd": "",
+          "inc_wd": "",
+          "exc_wd": "",
+          "fields": "title;infod",
+          "cnum": "002",
+          "sort": "{webdate:0}",
+          "ssort": "title",
+          "cl": 500,
+          "terminal": "",
+          "condition": [
+            {
+              "equal": "安徽永涵",
+              "fieldName": "infod",
+              "isLike": "true",
+              "likeType": "2"
+            }
+          ],
+          "time": null,
+          "highlights": "title;content",
+          "statistics": null,
+          "unionCondition": null,
+          "accuracy": "",
+          "noParticiple": "",
+          "searchRange": null,
+          "isBusiness": "1"
+        },
+        "jsonTextPath": "content",
+        "itemsPath": "result.records",
+        "titlePaths": [
+          "customtitle",
+          "title"
+        ],
+        "summaryPaths": [
+          "content"
+        ],
+        "summaryIsBody": true,
+        "publishedAtPath": "webdate",
+        "publishedAtUtcOffset": "+08:00",
+        "externalIdPath": "id",
+        "urlTemplate": "https://yonghan.etrading.cn{linkurl}",
+        "allowUrlPrefixes": [
+          "https://yonghan.etrading.cn/jyxx/"
+        ],
+        "sortByPublishedAt": true,
+        "pagination": {
+          "location": "bodyJson",
+          "pageParam": "pn",
+          "sizeParam": "rn",
+          "pageSize": 20,
+          "start": 0,
+          "step": 20,
+          "pages": 1,
+          "firstImportPages": 2,
+          "stopWhenShort": true
+        },
+        "_aihot": {
+          "initialBackfillLimit": 100,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "交易平台",
+        "安徽",
+        "安徽永涵",
+        "新点平台接口"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "json-jiangxi-ggzy-notices",
+      "name": "江西省公共资源交易网·交易公告",
+      "kind": "json_list",
+      "config": {
+        "url": "http://www.jxsggzy.cn/XZinterface/rest/esinteligentsearch/getFullTextDataNew",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "Mozilla/5.0"
+        },
+        "bodyJson": {
+          "token": "",
+          "pn": 0,
+          "rn": 100,
+          "sdt": "",
+          "edt": "",
+          "wd": "",
+          "inc_wd": "",
+          "exc_wd": "",
+          "fields": "",
+          "cnum": "",
+          "sort": "{\"webdate\":\"0\",\"id\":\"0\"}",
+          "ssort": "",
+          "cl": 500,
+          "terminal": "",
+          "condition": [],
+          "time": [],
+          "highlights": "",
+          "statistics": null,
+          "unionCondition": [
+            {
+              "fieldName": "categorynum",
+              "equal": null,
+              "notEqual": null,
+              "equalList": [
+                "002001001",
+                "002002002",
+                "002003001",
+                "002004001",
+                "002005001",
+                "002006001",
+                "002007001",
+                "002008001",
+                "002009001",
+                "002010001",
+                "002011001",
+                "002013001",
+                "002015001",
+                "002016001",
+                "002017001",
+                "002021001",
+                "002019001",
+                "002018001",
+                "002020001",
+                "002022002",
+                "002023002",
+                "002024002",
+                "002025002",
+                "002026002"
+              ],
+              "notEqualList": null
+            }
+          ],
+          "accuracy": "",
+          "noParticiple": "1",
+          "noWd": true
+        },
+        "itemsPath": "result.records",
+        "titlePaths": [
+          "titlenew",
+          "title"
+        ],
+        "summaryPaths": [
+          "content"
+        ],
+        "publishedAtPath": "webdate",
+        "publishedAtUtcOffset": "+08:00",
+        "externalIdPath": "id",
+        "urlTemplate": "http://www.jxsggzy.cn{linkurl}",
+        "allowUrlPrefixes": [
+          "http://www.jxsggzy.cn/jyxx/"
+        ],
+        "sortByPublishedAt": true,
+        "pagination": {
+          "location": "bodyJson",
+          "pageParam": "pn",
+          "sizeParam": "rn",
+          "pageSize": 100,
+          "start": 0,
+          "step": 100,
+          "pages": 1,
+          "firstImportPages": 2,
+          "stopWhenShort": true
+        },
+        "_aihot": {
+          "initialBackfillLimit": 100,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "官方",
+        "江西",
+        "公共资源交易",
+        "交易公告"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "json-longji-353",
+      "name": "龙集采·采购公开信息",
+      "kind": "json_list",
+      "config": {
+        "url": "https://ibuy.ccb.com/json/contentFile/353/1.json",
+        "itemsPath": "",
+        "titlePaths": [
+          "title"
+        ],
+        "summaryPaths": [
+          "releaseInst",
+          "area"
+        ],
+        "publishedAtPath": "releaseDate",
+        "publishedAtUtcOffset": "+08:00",
+        "externalIdPath": "id",
+        "urlTemplate": "https://ibuy.ccb.com/cms/#/content?pId={channelId}&id={id}",
+        "allowUrlPrefixes": [
+          "https://ibuy.ccb.com/cms/"
+        ],
+        "sortByPublishedAt": true,
+        "pagination": {
+          "location": "query",
+          "pageParam": "page",
+          "sizeParam": "size",
+          "pageSize": 1000,
+          "start": 1,
+          "step": 1,
+          "pages": 1,
+          "firstImportPages": 1,
+          "stopWhenShort": false
+        },
+        "_aihot": {
+          "initialBackfillLimit": 100,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1_5",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "企业采购",
+        "龙集采",
+        "采购结果"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "json-longji-355",
+      "name": "龙集采·招标公告",
+      "kind": "json_list",
+      "config": {
+        "url": "https://ibuy.ccb.com/json/contentFile/355/1.json",
+        "itemsPath": "",
+        "titlePaths": [
+          "title"
+        ],
+        "summaryPaths": [
+          "releaseInst",
+          "area"
+        ],
+        "publishedAtPath": "releaseDate",
+        "publishedAtUtcOffset": "+08:00",
+        "externalIdPath": "id",
+        "urlTemplate": "https://ibuy.ccb.com/cms/#/content?pId={channelId}&id={id}",
+        "allowUrlPrefixes": [
+          "https://ibuy.ccb.com/cms/"
+        ],
+        "sortByPublishedAt": true,
+        "pagination": {
+          "location": "query",
+          "pageParam": "page",
+          "sizeParam": "size",
+          "pageSize": 1000,
+          "start": 1,
+          "step": 1,
+          "pages": 1,
+          "firstImportPages": 1,
+          "stopWhenShort": false
+        },
+        "_aihot": {
+          "initialBackfillLimit": 100,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1_5",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "企业采购",
+        "龙集采",
+        "招标公告"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "json-longji-360",
+      "name": "龙集采·供应商征集",
+      "kind": "json_list",
+      "config": {
+        "url": "https://ibuy.ccb.com/json/contentFile/360/1.json",
+        "itemsPath": "",
+        "titlePaths": [
+          "title"
+        ],
+        "summaryPaths": [
+          "releaseInst",
+          "area"
+        ],
+        "publishedAtPath": "releaseDate",
+        "publishedAtUtcOffset": "+08:00",
+        "externalIdPath": "id",
+        "urlTemplate": "https://ibuy.ccb.com/cms/#/content?pId={channelId}&id={id}",
+        "allowUrlPrefixes": [
+          "https://ibuy.ccb.com/cms/"
+        ],
+        "sortByPublishedAt": true,
+        "pagination": {
+          "location": "query",
+          "pageParam": "page",
+          "sizeParam": "size",
+          "pageSize": 1000,
+          "start": 1,
+          "step": 1,
+          "pages": 1,
+          "firstImportPages": 1,
+          "stopWhenShort": false
+        },
+        "_aihot": {
+          "initialBackfillLimit": 100,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1_5",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "企业采购",
+        "龙集采",
+        "供应商征集"
+      ],
       "site_fulltext": false,
       "syndicate_fulltext": false
     }
