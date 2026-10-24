@@ -9,20 +9,56 @@ import { sql } from "../db.ts";
 import { sha256 } from "../lib/ids.ts";
 import { loadContact, type ContactSettings } from "../site/contact.ts";
 import { audit } from "./auth.ts";
-import { COLLECTION_SCHEDULE_KEY, DEFAULT_COLLECTION_TIMES, normalizeCollectionTimes, scheduleOf, type CollectionSchedule } from "../sources/schedule.ts";
+import { COLLECTION_SCHEDULE_KEY, normalizeCalendarDates, normalizeCollectionTimes, type CollectionSchedule } from "../sources/schedule.ts";
+import { loadCollectionSchedule } from "../sources/schedule-config.ts";
+import { publishArticle } from "../publication/publish.ts";
 
 const MAX_QR_BYTES = 2 * 1024 * 1024;
+const MAANSHAN_RULE_KEY = "publication.maanshan_software_maintenance";
 
-export async function getCollectionSchedule(): Promise<CollectionSchedule> {
-  const [row] = await sql<{ value: unknown }[]>`SELECT value FROM settings WHERE key = ${COLLECTION_SCHEDULE_KEY}`;
-  return scheduleOf(row?.value ?? { times: DEFAULT_COLLECTION_TIMES });
+export async function getMaanshanRule() {
+  const [row] = await sql<{ value: { enabled?: boolean }; updated_at: Date }[]>`SELECT value, updated_at FROM settings WHERE key = ${MAANSHAN_RULE_KEY}`;
+  return { enabled: row?.value?.enabled !== false, updatedAt: row?.updated_at.toISOString() ?? null };
 }
 
-export async function updateCollectionSchedule(input: { times: unknown; reason: string }, actor: string) {
+export async function updateMaanshanRule(input: { enabled: boolean; reason: string }, actor: string) {
+  if (!input.reason?.trim()) throw new Error("请填写调整原因");
+  const before = await getMaanshanRule();
+  const after = { enabled: input.enabled };
+  await sql`
+    INSERT INTO settings (key, value, updated_by) VALUES (${MAANSHAN_RULE_KEY}, ${sql.json(after)}, ${actor})
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`;
+  await audit(actor, "settings.maanshan_rule", `settings:${MAANSHAN_RULE_KEY}`, input.reason.trim(), before, after);
+  let reprocessed = 0;
+  if (before.enabled && !after.enabled) {
+    const rows = await sql<{ article_id: string }[]>`
+      SELECT article_id FROM publications WHERE selected AND reason LIKE '马鞍山软件运维特例：%' ORDER BY article_id`;
+    for (const row of rows) {
+      await publishArticle(row.article_id);
+      reprocessed += 1;
+    }
+  }
+  return { ...after, updatedAt: new Date().toISOString(), reprocessed };
+}
+
+export async function getCollectionSchedule(): Promise<CollectionSchedule> {
+  return loadCollectionSchedule();
+}
+
+export async function updateCollectionSchedule(input: { times: unknown; skipPublicHolidays?: unknown; calendar?: unknown; reason: string }, actor: string) {
   if (!input.reason?.trim()) throw new Error("reason is required");
-  const times = normalizeCollectionTimes(input.times);
   const before = await getCollectionSchedule();
-  const after = { times, timezone: "Asia/Shanghai" as const };
+  const times = normalizeCollectionTimes(input.times);
+  const calendarInput = input.calendar && typeof input.calendar === "object" ? input.calendar as Record<string, unknown> : before.calendar;
+  const year = Number(calendarInput.year);
+  const holidays = normalizeCalendarDates(calendarInput.holidays ?? before.calendar.holidays, year);
+  const workdays = normalizeCalendarDates(calendarInput.workdays ?? before.calendar.workdays, year);
+  const after = {
+    times,
+    timezone: "Asia/Shanghai" as const,
+    skipPublicHolidays: input.skipPublicHolidays === undefined ? before.skipPublicHolidays : input.skipPublicHolidays !== false,
+    calendar: { year, holidays, workdays },
+  };
   await sql`
     INSERT INTO settings (key, value, updated_by) VALUES (${COLLECTION_SCHEDULE_KEY}, ${sql.json(after)}, ${actor})
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`;

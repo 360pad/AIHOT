@@ -21,6 +21,7 @@ import { registerFeedback } from "./feedback.ts";
 import { loadHot, loadStoryDetail, resolveStory } from "@aihot/backend/publication/stories";
 import { listReports, loadReport, reportNavigation, loadReportNavigation, loadReportMonth, type ReportKind } from "@aihot/backend/publication/reports";
 import { loadSiteCodexResetPage, loadSiteCodexResetDay } from "@aihot/backend/publication/monitor";
+import { loadCollectionSummary } from "@aihot/backend/publication/collection-summary";
 import { codexResetVersion } from "@aihot/backend/monitor/read";
 import { cached } from "@aihot/backend/lib/cache";
 import { looseQuery, sendJsonWithEtag, sendProblem } from "../http/respond.ts";
@@ -28,6 +29,7 @@ import { looseQuery, sendJsonWithEtag, sendProblem } from "../http/respond.ts";
 type Handler = (req: FastifyRequest, reply: FastifyReply) => Promise<unknown>;
 
 const codexVersion = cached(() => codexResetVersion(), { freshMs: 5_000, maxStaleMs: 5_000 });
+const collectionSummary = cached(loadCollectionSummary, { freshMs: 30_000, maxStaleMs: 30_000 });
 
 class BadRequest extends Error {}
 
@@ -85,6 +87,10 @@ export async function parseFilters(q: Record<string, string>): Promise<FilterPar
 export function registerSite(app: FastifyInstance) {
   app.get("/api/site/meta", siteHandler(async (req, reply) => {
     return sendJsonWithEtag(req, reply, siteMeta(), { etagPrefix: "meta", cacheControl: "public, max-age=60, s-maxage=60" });
+  }));
+
+  app.get("/api/site/collection-summary", siteHandler(async (req, reply) => {
+    return sendJsonWithEtag(req, reply, await collectionSummary.get(), { etagPrefix: "collection-summary", cacheControl: "public, max-age=30, s-maxage=30" });
   }));
 
   if (FEATURES.codexResetMonitor) registerCodexReset(app);

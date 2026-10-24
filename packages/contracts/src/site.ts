@@ -56,13 +56,14 @@ export interface ItemSummary {
   tags: string[];
   score: number | null;
   selected: boolean;
+  manualSelected?: boolean;
   channel: "news" | "x";
   story: StoryRef | null;
   x: XPostView | null;
 }
 
 /** The fields rendered by a site feed card; full original text lives in the item detail. */
-export interface FeedItemSummary extends Pick<ItemSummary, "id" | "title" | "summary" | "reason" | "publishedAt" | "timelineAt" | "category" | "tags" | "score" | "selected" | "channel"> {
+export interface FeedItemSummary extends Pick<ItemSummary, "id" | "title" | "summary" | "reason" | "publishedAt" | "timelineAt" | "category" | "tags" | "score" | "selected" | "manualSelected" | "channel"> {
   source: Pick<SourceRef, "name">;
   x: (Pick<XPostView, "authorName" | "handle" | "avatarUrl" | "avatarSrcSet" | "media"> & {
     quoted: Omit<NonNullable<XPostView["quoted"]>, "url"> | null;
@@ -117,6 +118,12 @@ export interface TimelineResponse {
   hot: HotStripEntry[] | null;
   dayCounts: Record<string, number>;
   generatedAt: string;
+}
+
+export interface CollectionSummary {
+  times: string[];
+  timezone: "Asia/Shanghai";
+  lastSourceSuccessAt: string | null;
 }
 
 export interface PoolResponse {

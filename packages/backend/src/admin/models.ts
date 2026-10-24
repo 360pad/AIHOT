@@ -81,8 +81,17 @@ export async function modelsOverview(days = 7) {
         estimate: priced(u),
       })),
   }));
+  const sumByCurrency = (rows: Array<{ amount: number; currency: string }>) => [...rows.reduce((totals, row) => {
+    totals.set(row.currency, (totals.get(row.currency) ?? 0) + row.amount);
+    return totals;
+  }, new Map<string, number>()).entries()].map(([currency, amount]) => ({ currency, amount }));
+  const allUsage = usage.map((row) => ({ row, estimate: priced(row) }));
+  const fees = {
+    actual: sumByCurrency(allUsage.flatMap(({ row }) => row.actual_cost === null || !row.currency ? [] : [{ amount: Number(row.actual_cost), currency: row.currency }])),
+    estimate: sumByCurrency(allUsage.flatMap(({ row, estimate }) => !estimate ? [] : [{ amount: estimate.amount, currency: estimate.currency }])),
+  };
   const choices = Object.values(MODELS).map((m) => ({ key: m.key, service: m.service, vision: !!m.vision }));
-  return { days, capabilities, choices, history, benches };
+  return { days, capabilities, choices, history, benches, fees };
 }
 
 /** Switches a capability to another registered model (or back to the environment/default when null). */

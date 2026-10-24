@@ -7,7 +7,7 @@ import { loadOr404 } from "../lib/api.server";
 import { breadcrumbLd, pageMeta, siteUrl, titled } from "../lib/seo";
 import { fullDateTime, relativeTime } from "../lib/format";
 import { markRead } from "../lib/local-state";
-import { SelectedBadge } from "../components/ui/Badge";
+import { ManualSelectedBadge, RegionalRuleBadge, SelectedBadge } from "../components/ui/Badge";
 import { ScoreLabel } from "../components/ui/Score";
 import { PillTabs } from "../components/ui/Tabs";
 import { ArticleLayout, RailSection } from "../components/ui/Page";
@@ -184,7 +184,8 @@ export default function ItemPage() {
   );
   const verdict = (item.selected || item.score !== null) && (
     <div className="flex items-center gap-2">
-      {item.selected && <SelectedBadge />}
+      {item.selected && (item.manualSelected ? <ManualSelectedBadge /> : <SelectedBadge />)}
+      {item.selected && item.reason?.startsWith("马鞍山软件运维特例：") && <RegionalRuleBadge />}
       <ScoreLabel score={item.score} />
     </div>
   );
@@ -291,9 +292,10 @@ export default function ItemPage() {
             <span suppressHydrationWarning>· {relativeTime(publishedIso)}</span>
             {item.selected && (
               <span className="ml-1 lg:hidden">
-                <SelectedBadge />
+                {item.manualSelected ? <ManualSelectedBadge /> : <SelectedBadge />}
               </span>
             )}
+            {item.selected && item.reason?.startsWith("马鞍山软件运维特例：") && <span className="ml-1 lg:hidden"><RegionalRuleBadge /></span>}
             {item.score !== null && (
               <span className="ml-1 lg:hidden">
                 <ScoreLabel score={item.score} />

@@ -1,5 +1,6 @@
 // JSON sources: plain JSON APIs, JSON embedded in HTML (script tags, window variables).
 import { credential } from "../config.ts";
+import { sanitizeBody } from "../content/sanitize.ts";
 import { guardedFetch } from "../lib/http-fetch.ts";
 import { collapseWhitespace, stripTags } from "../lib/text.ts";
 import { fromHtml } from "./web-list.ts";
@@ -148,6 +149,29 @@ interface JsonPage {
   itemCount: number | null;
 }
 
+const hostRequestTails = new Map<string, Promise<void>>();
+const hostRequestStartedAt = new Map<string, number>();
+
+async function withHostRequestInterval<T>(url: string, intervalMs: number, request: () => Promise<T>): Promise<T> {
+  if (!(intervalMs > 0)) return request();
+  const host = new URL(url).host;
+  const previous = hostRequestTails.get(host) ?? Promise.resolve();
+  let release!: () => void;
+  const lock = new Promise<void>((resolve) => { release = resolve; });
+  const tail = previous.then(() => lock);
+  hostRequestTails.set(host, tail);
+  await previous;
+  try {
+    const waitMs = intervalMs - (Date.now() - (hostRequestStartedAt.get(host) ?? 0));
+    if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
+    hostRequestStartedAt.set(host, Date.now());
+    return await request();
+  } finally {
+    release();
+    if (hostRequestTails.get(host) === tail) hostRequestTails.delete(host);
+  }
+}
+
 function pageRequest(source: SourceRow, page: number): { url: string; bodyJson?: unknown; bodyForm?: Record<string, unknown> } {
   const c = source.config;
   const pagination = c.pagination;
@@ -184,17 +208,30 @@ async function fetchJsonPage(source: SourceRow, page: number): Promise<JsonPage>
   const formBody = request.bodyForm
     ? new URLSearchParams(Object.entries(request.bodyForm).map(([key, value]) => [key, String(value)])).toString()
     : undefined;
-  const res = await guardedFetch(url, {
+  const bodyJson = request.bodyJson && c.requestTimestampParam
+    ? { ...(request.bodyJson as Record<string, unknown>), [String(c.requestTimestampParam)]: Date.now() }
+    : request.bodyJson;
+  const intervalMs = Math.max(0, Math.min(60_000, Number(c.requestIntervalMs ?? 0)));
+  const res = await withHostRequestInterval(url, intervalMs, () => guardedFetch(url, {
     method: c.method ?? "GET",
-    headers: request.bodyJson
+    headers: bodyJson
       ? { ...headers, "content-type": "application/json" }
       : request.bodyForm
         ? { ...headers, "content-type": "application/x-www-form-urlencoded; charset=UTF-8" }
         : headers,
-    body: request.bodyJson ? JSON.stringify(request.bodyJson) : formBody,
+    body: bodyJson ? JSON.stringify(bodyJson) : formBody,
     timeoutMs: 25_000,
-  });
-  if (res.status !== 200) throw new FetchError(`HTTP ${res.status}`, res.status);
+  }));
+  if (res.status !== 200) {
+    let reason = "";
+    try {
+      const error = JSON.parse(res.text()) as Record<string, unknown>;
+      const code = typeof error.code === "string" ? error.code : "";
+      const message = typeof error.error === "string" ? error.error : typeof error.message === "string" ? error.message : "";
+      reason = [code, message].filter(Boolean).join(": ");
+    } catch { /* the status remains useful when the response is not JSON */ }
+    throw new FetchError(`HTTP ${res.status}${reason ? `: ${reason}` : ""}`, res.status);
+  }
   let data: unknown;
   if (c.mode === "html_json_key" || c.mode === "html_window_var") data = embeddedJson(res.text(), source);
   else {
@@ -283,4 +320,87 @@ export async function fetchJsonList(source: SourceRow, opts: JsonListOptions = {
   }
   if (out.length === 0 && pagination && pageCount > 1) throw new FetchError("no items returned across paginated requests");
   return out;
+}
+
+/** Fetches the full HTML content behind configured JSON-list entries. Existing entries can be skipped
+ * by the collector so routine runs only pay the extra network requests for new announcements. */
+export async function enrichJsonDetails(
+  source: SourceRow,
+  candidates: Candidate[],
+  opts: { skipUrls?: ReadonlySet<string> } = {},
+): Promise<{ attempted: number; fetched: number; failed: number; failureReasons: string[] }> {
+  const detail = source.config.detailApi;
+  if (!detail) return { attempted: 0, fetched: 0, failed: 0, failureReasons: [] };
+
+  const maxFetches = Math.max(0, Math.min(60, Number(detail.maxFetches ?? 0)));
+  let attempted = 0;
+  let fetched = 0;
+  let failed = 0;
+  const failureReasons: string[] = [];
+  for (const candidate of candidates) {
+    if (attempted >= maxFetches) break;
+    if (opts.skipUrls?.has(candidate.url) || candidate.bodyText) continue;
+    const id = getPath(candidate, String(detail.idPath ?? ""));
+    if (id === null || id === undefined || id === "") continue;
+
+    attempted++;
+    try {
+      const method = String(detail.method ?? "POST").toUpperCase();
+      const param = String(detail.idParam ?? "id");
+      const query = new URLSearchParams([[param, String(id)]]);
+      const url = new URL(String(detail.url));
+      const idLocation = String(detail.idLocation ?? (method === "GET" ? "query" : "bodyForm"));
+      const requestUrl = idLocation === "query" ? (url.searchParams.set(param, String(id)), url.toString()) : url.toString();
+      const body = idLocation === "bodyForm" ? query.toString() : undefined;
+      const intervalMs = Math.max(0, Math.min(60_000, Number(source.config.requestIntervalMs ?? 0)));
+      const response = await withHostRequestInterval(requestUrl, intervalMs, () => guardedFetch(requestUrl, {
+        method,
+        headers: {
+          accept: "application/json",
+          ...(body ? { "content-type": "application/x-www-form-urlencoded; charset=UTF-8" } : {}),
+        },
+        body,
+        timeoutMs: 25_000,
+        maxBytes: 8 * 1024 * 1024,
+      }));
+      if (response.status !== 200) {
+        let reason = "";
+        try {
+          const error = JSON.parse(response.text()) as Record<string, unknown>;
+          const code = typeof error.code === "string" ? error.code : "";
+          const message = typeof error.error === "string" ? error.error : typeof error.message === "string" ? error.message : "";
+          reason = [code, message].filter(Boolean).join(": ");
+        } catch { /* keep the HTTP status */ }
+        throw new FetchError(`detail API HTTP ${response.status}${reason ? `: ${reason}` : ""}`, response.status);
+      }
+      let result: unknown;
+      try {
+        result = JSON.parse(response.text());
+      } catch {
+        throw new FetchError("detail API response is not JSON");
+      }
+      const html = getPath(result, String(detail.contentPath ?? ""));
+      if (typeof html !== "string" || !html.trim()) throw new FetchError("detail API content was empty");
+      const detailTitle = detail.titlePath ? getPath(result, String(detail.titlePath)) : null;
+      if (typeof detailTitle === "string" && detailTitle.trim()) candidate.title = collapseWhitespace(stripTags(detailTitle));
+      const detailDate = detail.publishedAtPath ? getPath(result, String(detail.publishedAtPath)) : null;
+      const parsedDate = toDate(detailDate, detail.publishedAtUnit, detail.publishedAtUtcOffset);
+      if (parsedDate) candidate.publishedAt = parsedDate;
+      const bodyHtml = sanitizeBody(html, candidate.url);
+      const text = collapseWhitespace(stripTags(bodyHtml));
+      if (!text) throw new FetchError("detail API content contained no text");
+      const summary = detail.summaryPath ? getPath(result, String(detail.summaryPath)) : null;
+      candidate.bodyHtml = bodyHtml;
+      candidate.bodyText = text;
+      candidate.bodyStatus = "ok";
+      candidate.excerpt = typeof summary === "string" && summary.trim()
+        ? collapseWhitespace(stripTags(summary)).slice(0, 2000)
+        : text.slice(0, 2000);
+      fetched++;
+    } catch (error) {
+      failed++;
+      if (failureReasons.length < 5) failureReasons.push(String(error instanceof Error ? error.message : error).slice(0, 300));
+    }
+  }
+  return { attempted, fetched, failed, failureReasons };
 }

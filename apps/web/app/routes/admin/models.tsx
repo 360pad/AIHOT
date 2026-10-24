@@ -27,6 +27,7 @@ interface Usage {
 interface Models {
   days: number;
   capabilities: Array<{ key: string; label: string; env: string; defaultModel: string; vision: boolean; current: { model: string; source: "admin" | "env" | "default" }; usage: Usage[] }>;
+  fees: { actual: Array<{ currency: string; amount: number }>; estimate: Array<{ currency: string; amount: number }> };
   choices: Array<{ key: string; service: string; vision: boolean }>;
   history: Array<{ at: string; actor: string; subject: string; reason: string | null; before: { model: string; source: string } | null; after: { model: string; source: string } | null }>;
   benches: Array<{ id: string; label: string; sample_size: number; prompt_version: string | null; models: string[]; created_at: string }>;
@@ -37,7 +38,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   return adminGet<Models>(request, `/api/admin/models?days=${encodeURIComponent(days)}`);
 }
 
-export const meta: Route.MetaFunction = () => [{ title: `模型与评测 · ${SITE.name} 后台` }];
+export const meta: Route.MetaFunction = () => [{ title: `AI 费用与评测 · ${SITE.name} 后台` }];
 
 const SOURCE_LABEL = { admin: "后台切换", env: "环境变量", default: "代码默认" } as const;
 const secs = (ms: number | null) => (ms == null ? "—" : ms >= 10_000 ? `${Math.round(ms / 1000)} s` : `${(ms / 1000).toFixed(1)} s`);
@@ -50,10 +51,18 @@ export default function ModelsAdmin({ loaderData: m }: Route.ComponentProps) {
 
   return (
     <AdminPage wide
-      title="模型与评测"
-      subtitle="每项能力当前用哪个模型、来自哪里（后台切换 > 环境变量 > 代码默认），以及近期的成功率、耗时与费用。切换只影响之后的新任务，已有结果不重算；换精选模型前先看 SelectBench 同批对比。"
+      title="AI 费用与评测"
+      subtitle="按能力查看模型调用量、成功率、耗时和费用。只有模型服务商明确返回金额与币种时才计为实际费用；按 token 单价计算的金额会标为估算。切换模型只影响新任务，已有结果不重算。"
       actions={<FilterChips param="days" options={[{ value: "1", label: "24 小时" }, { value: "", label: "7 天" }, { value: "30", label: "30 天" }]} />}
     >
+      <div className="mb-5 grid gap-4 md:grid-cols-2">
+        <Card title="已记录实际费用" right={<Badge tone="ok">服务商回报</Badge>}>
+          {m.fees.actual.length ? <div className="flex flex-wrap gap-x-6 gap-y-2 text-[20px] font-semibold text-ink">{m.fees.actual.map((v) => <span key={v.currency}>{money(v.amount, v.currency)} <small className="text-[12px] font-normal text-ink-3">{v.currency}</small></span>)}</div> : <div className="text-[14px] text-ink-3">所选时间内，模型网关没有返回可核实的实际金额。</div>}
+        </Card>
+        <Card title="按 token 单价估算" right={<Badge tone="info">估算值</Badge>}>
+          {m.fees.estimate.length ? <div className="flex flex-wrap gap-x-6 gap-y-2 text-[20px] font-semibold text-ink">{m.fees.estimate.map((v) => <span key={v.currency}>≈ {money(v.amount, v.currency)} <small className="text-[12px] font-normal text-ink-3">{v.currency}</small></span>)}</div> : <div className="text-[14px] text-ink-3">没有可用单价或 token 用量。</div>}
+        </Card>
+      </div>
       <div className="grid gap-5">
         {m.capabilities.map((c) => {
           const total = c.usage.reduce((a, u) => a + u.calls, 0);

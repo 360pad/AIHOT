@@ -17,7 +17,7 @@ export interface ExtractedBody {
   html: string;
   text: string;
   images: Array<{ kind: "image"; url: string; width: number | null; height: number | null }>;
-  via: "readability" | "jina";
+  via: "readability" | "selector" | "jina";
 }
 
 const MIN_BODY_CHARS = 200;

@@ -28,6 +28,12 @@ export function isStageKey(value: string): value is StageKey {
   return (STAGE_KEYS as readonly string[]).includes(value);
 }
 
+export const AWARD_RESULT_TITLE_PATTERN = /(?:(?:中标|成交|中选)(?:候选(?:人|供应商|单位)?|人|供应商|单位|结果|通知书|公告|公示)(?:公告|公示)?|(?:采购|招标|评标)(?:中标|成交)?结果(?:公告|公示)?|(?:政府采购)?合同(?:公告|公示|备案))/u;
+
+export function isAwardResultTitle(title: string): boolean {
+  return AWARD_RESULT_TITLE_PATTERN.test(title);
+}
+
 export const CATEGORY_TAGS = [
   "智慧水利",
   "城市治理与数字政府",

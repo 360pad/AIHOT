@@ -25,7 +25,7 @@ export const HOME_STAGE_NAV: Array<{ key: StageKey; label: string; icon: NavItem
 
 export const SIDEBAR: Array<{ title: string; items: NavItem[]; featuredStages?: boolean }> = [
   {
-    title: "商机",
+    title: "招标信息",
     featuredStages: true,
     items: [
       { to: "/", label: "精选", icon: IconBolt, end: true },
@@ -36,10 +36,7 @@ export const SIDEBAR: Array<{ title: string; items: NavItem[]; featuredStages?: 
   },
   {
     title: "行业资讯",
-    items: [
-      { to: "/industry", label: "行业动态", icon: IconBolt },
-      { to: "/hot", label: "热点榜", icon: IconFlame },
-    ],
+    items: [{ to: "/hot", label: "热点榜", icon: IconFlame }],
   },
   {
     title: "专题",
@@ -71,7 +68,7 @@ export const TABBAR: NavItem[] = [
 ];
 
 /** Pages reached from the mobile "更多" tab keep that tab highlighted. */
-export const MORE_PATHS = ["/more", "/hot", "/topics", "/starred", "/industry", "/leaderboard", "/codex-reset", "/feedback", "/terms", "/privacy"];
+export const MORE_PATHS = ["/more", "/hot", "/topics", "/starred", "/leaderboard", "/codex-reset", "/feedback", "/terms", "/privacy"];
 
 export function tabIsActive(item: NavItem, pathname: string): boolean {
   if (item.end) return pathname === item.to;

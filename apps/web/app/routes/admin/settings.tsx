@@ -12,7 +12,12 @@ interface Settings {
   contact: { wechatQr: string; feishuQr: string };
   targets: Array<{ key: string; purpose: string; kind: string; enabled: boolean; enabled_at: string | null; config_ref: string | null; note: string | null; deliveries_7d: number; last_sent_at: string | null }>;
   budgets: Array<{ service: string; per_minute: number; per_hour: number; per_day: number; note: string | null; updated_at: string; used_day: number; used_hour: number }>;
-  collectionSchedule: { times: string[]; timezone: string };
+  collectionSchedule: {
+    times: string[];
+    timezone: string;
+    skipPublicHolidays: boolean;
+    calendar: { year: number; holidays: string[]; workdays: string[] };
+  };
   collectionStatus: {
     checkedAt: string;
     fetch: { runs: number; ok: number; failed: number; found: number; created: number };
@@ -114,10 +119,18 @@ function CollectionScheduleCard({ schedule, status }: { schedule: Settings["coll
   const { run, pending } = useAdminAction();
   const revalidator = useRevalidator();
   const [times, setTimes] = useState(() => schedule.times.length ? schedule.times : ["08:00", "17:00"]);
+  const [skipPublicHolidays, setSkipPublicHolidays] = useState(schedule.skipPublicHolidays);
+  const [year, setYear] = useState(schedule.calendar.year);
+  const [holidays, setHolidays] = useState(schedule.calendar.holidays.join("\n"));
+  const [workdays, setWorkdays] = useState(schedule.calendar.workdays.join("\n"));
   const [open, setOpen] = useState(false);
   const [watching, setWatching] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const changed = JSON.stringify(times) !== JSON.stringify(schedule.times);
+  const dateLines = (value: string) => value.split(/\r?\n/).map((v) => v.trim()).filter(Boolean);
+  const changed = JSON.stringify({ times, skipPublicHolidays, year, holidays: dateLines(holidays), workdays: dateLines(workdays) }) !== JSON.stringify({
+    times: schedule.times, skipPublicHolidays: schedule.skipPublicHolidays, year: schedule.calendar.year,
+    holidays: schedule.calendar.holidays, workdays: schedule.calendar.workdays,
+  });
   useEffect(() => {
     if (!watching) return;
     let left = 10;
@@ -148,7 +161,7 @@ function CollectionScheduleCard({ schedule, status }: { schedule: Settings["coll
             <Input type="time" value={time} onChange={(e) => setTimes(times.map((v, i) => i === index ? e.target.value : v))} className="!w-32" />
           </label>
         ))}
-        {times.length < 4 && <Button size="sm" tone="ghost" onClick={() => setTimes([...times, "12:00"])}>增加时段</Button>}
+        {times.length < 3 && <Button size="sm" tone="ghost" onClick={() => setTimes([...times, "12:00"])}>增加时段</Button>}
         {times.length > 1 && <Button size="sm" tone="ghost" onClick={() => setTimes(times.slice(0, -1))}>减少时段</Button>}
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -156,6 +169,26 @@ function CollectionScheduleCard({ schedule, status }: { schedule: Settings["coll
         <Button busy={pending === "fetch-scheduled"} onClick={startFetch}>立即抓取一轮</Button>
         <Link className="text-[12px] text-accent hover:underline" to="/admin/runs">查看运行与错误</Link>
         <span className="text-[12px] text-ink-4">手动抓取与定时抓取使用同一条采集链路，仍受请求上限保护。</span>
+      </div>
+      <div className="mt-5 rounded-card border border-line/70 bg-bg-sunk/30 p-4">
+        <label className="flex items-start gap-2 text-[13px] font-medium text-ink-2">
+          <input type="checkbox" checked={skipPublicHolidays} onChange={(e) => setSkipPublicHolidays(e.target.checked)} className="mt-0.5 accent-accent" />
+          法定节假日暂停自动采集
+        </label>
+        <p className="ml-6 mt-1 text-[12px] leading-5 text-ink-4">调休工作日照常采集；“立即抓取一轮”不受此选项限制。日期按国务院当年放假通知维护。</p>
+        <div className="mt-3 grid gap-4 lg:grid-cols-[140px_1fr_1fr]">
+          <label className="text-[12px] text-ink-3">日历年份
+            <Input aria-label="节假日日历年份" type="number" min={2025} max={2100} value={year} onChange={(e) => setYear(Number(e.target.value))} className="mt-1" />
+          </label>
+          <label className="text-[12px] text-ink-3">放假日期（每行一个 YYYY-MM-DD）
+            <textarea aria-label="放假日期" value={holidays} onChange={(e) => setHolidays(e.target.value)} rows={4} className="mt-1 w-full rounded-control border border-line bg-white px-3 py-2 font-mono text-[12px] text-ink outline-none focus:border-accent" />
+          </label>
+          <label className="text-[12px] text-ink-3">调休工作日（每行一个 YYYY-MM-DD）
+            <textarea aria-label="调休工作日" value={workdays} onChange={(e) => setWorkdays(e.target.value)} rows={4} className="mt-1 w-full rounded-control border border-line bg-white px-3 py-2 font-mono text-[12px] text-ink outline-none focus:border-accent" />
+          </label>
+        </div>
+        {year === 2026 && <a className="mt-2 inline-block text-[12px] text-accent hover:underline" href="https://www.gov.cn/zhengce/content/202511/content_7047090.htm" target="_blank" rel="noreferrer">核对国务院办公厅 2026 年节假日安排 ↗</a>}
+        <p className="mt-2 text-[12px] text-ink-4">当前已配置 {dateLines(holidays).length} 个放假日、{dateLines(workdays).length} 个调休工作日。年份切换后请按当年通知更新日期。</p>
       </div>
       {notice && <div className="mt-3 rounded-control bg-accent-softer px-3 py-2 text-[12.5px] text-ink-2">{notice}</div>}
       <div className="mt-4 rounded-card bg-bg-sunk/60 px-3.5 py-3 text-[12.5px] text-ink-2">
@@ -174,11 +207,13 @@ function CollectionScheduleCard({ schedule, status }: { schedule: Settings["coll
       <ReasonDialog
         open={open}
         title="保存招投标采集计划"
-        description={`每天将在 ${times.join("、")}（北京时间）执行采集。`}
+        description={`每天将在 ${times.join("、")}（北京时间）执行采集。${skipPublicHolidays ? `法定节假日暂停自动采集，${year} 年调休工作日正常执行；手动抓取不受影响。` : "法定节假日仍执行自动采集。"}`}
         confirmLabel="保存"
         busy={pending === "schedule"}
         onClose={() => setOpen(false)}
-        onSubmit={async (reason) => (await run("PUT", "/api/admin/collection-schedule", { times, reason }, { label: "schedule", success: "采集计划已更新" })) !== null}
+        onSubmit={async (reason) => (await run("PUT", "/api/admin/collection-schedule", {
+          times, skipPublicHolidays, calendar: { year, holidays: dateLines(holidays), workdays: dateLines(workdays) }, reason,
+        }, { label: "schedule", success: "采集计划已更新" })) !== null}
       />
     </Card>
   );
@@ -208,7 +243,8 @@ export default function SettingsAdmin({ loaderData: s }: Route.ComponentProps) {
           />
         </Card>
       </div>
-      <Card className="mt-5" title="付费请求上限" right={<span>已用：近 1 小时 / 近 24 小时</span>} pad={false}>
+      <Card className="mt-5" title="付费请求上限" right={<Link to="/admin/models" className="text-[12px] font-medium text-accent hover:underline">查看 AI 费用与评测 →</Link>} pad={false}>
+        <div className="border-b border-line/70 px-3 py-2 text-[12px] text-ink-3">本表控制调用次数熔断，不是金额账单；服务商实际回报金额和 token 估算请查看 AI 费用与评测。</div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-[13px]">
             <thead>

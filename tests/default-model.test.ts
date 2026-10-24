@@ -26,6 +26,9 @@ const provider = await stub((_hit, req) => {
       const title = rendered.match(/【标题】([^\n]*)/)?.[1] ?? "";
       return {
         label: "PASS", reason: "测试",
+        businessScore: { taskFit: { score: 28, reason: "任务匹配" }, delivery: { score: 19, reason: "交付吻合" }, importance: { score: 8, reason: "主要采购任务" } },
+        regionScore: { score: 10, reason: "材料未提供项目实施地，按中性分处理。" },
+        deadlineStatus: "open",
         materialCoverage: { status: "partial", sectionsRead: ["标题"], missing: [], notes: "" },
         projects: [{ id: "p1", name: title, number: null, lots: [], evidenceIds: ["e1"], tasks: [{
           id: "p1-t1", name: title, lot: null, action: "采购", object: "软件", methods: [], deliverables: [],
@@ -52,7 +55,7 @@ after(async () => {
   await closeDb();
 });
 
-test("one model runs the prefilter, both scores, the writing and the structure", async () => {
+test("one model runs the combined business judgement, writing and structure without a second scorer", async () => {
   const { articleId } = await upsertMaterial({
     sourceId: SOURCE, url: `https://example.com/${T}`, title: `A product launch ${T}`, bodyText: `A company launched a product with pricing and availability. ${T} `.repeat(6),
     bodyStatus: "ok", via: "fetch", publishedAt: new Date(),
@@ -60,7 +63,7 @@ test("one model runs the prefilter, both scores, the writing and the structure",
   const res = await analyzeArticle(articleId);
   assert.equal(res!.output!.selected, true);
   assert.equal(res!.output!.titleZh, "一个数字化项目的标题");
-  assert.equal(seen.length, 5, "prefilter, two scores, understand, structure");
+  assert.equal(seen.length, 3, "prefilter with business score, understand, structure");
   assert.ok(seen.every((r) => r.model === "one-model"), "every request names the configured model");
   const services = await sql<{ service: string }[]>`SELECT DISTINCT service FROM receipts WHERE subject LIKE ${`article:${articleId}%`}`;
   assert.deepEqual(services.map((s) => s.service), ["llm"]);

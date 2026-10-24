@@ -7,7 +7,11 @@ import { config } from "../config.ts";
 import { one, sql, type Tx } from "../db.ts";
 import { sha256, stableJson } from "../lib/ids.ts";
 import { collapseWhitespace } from "../lib/text.ts";
+import { articleText as sourceArticleText } from "../content/quality.ts";
 import { itemUrl } from "./links.ts";
+import { isMaanshanSoftwareMaintenance } from "./regional-selection.ts";
+import { awardResultKeywordGate, businessNegativeKeywordClues, loadBusinessProfile } from "../editorial/business.ts";
+import { isAwardResultTitle } from "@aihot/industry/taxonomy";
 import { enqueue, QUEUES, shutdownSignal } from "../jobs/queue.ts";
 import {
   bodyModeOf, channelOf, displayTags, isCurrentOpportunity, isIndexable, isPoolEligible, isSelectable, mayRedistribute, type SourceFacts,
@@ -25,6 +29,7 @@ interface ArticleRow {
   backfill: boolean;
   body_status: string;
   body_text: string | null;
+  excerpt: string | null;
   x_post: unknown;
   grouped_at: Date | null;
 }
@@ -150,7 +155,7 @@ export async function publishArticleTx(tx: Tx, articleId: string, options: Publi
   const now = options.now ?? new Date();
   const [article] = await tx<ArticleRow[]>`
     SELECT id, source_id, url, title, language, published_at, discovered_at, timeline_at, backfill, body_status,
-           body_text, x_post, grouped_at
+           body_text, excerpt, x_post, grouped_at
     FROM articles WHERE id = ${articleId} FOR UPDATE`;
   if (!article) return null;
   const [source] = await tx<SourceFacts[]>`
@@ -170,16 +175,34 @@ export async function publishArticleTx(tx: Tx, articleId: string, options: Publi
 
   const f = override?.fields ?? {};
   const isChineseTitle = article.language === "zh" || /[一-鿿]/.test(article.title);
+  const awardResult = isAwardResultTitle(article.title);
+  const awardGate = awardResult
+    ? awardResultKeywordGate({ title: article.title, excerpt: article.excerpt, bodyText: article.body_text }, await loadBusinessProfile())
+    : null;
+  const awardReference = awardGate?.matched === true;
+  const sourceText = collapseWhitespace(sourceArticleText(article.body_text, article.excerpt) ?? "");
   // An X post carries its Chinese in the summary and translation; without a Chinese title its own
   // text is the title, where an article would still be a half-finished card.
   const zhTitle = analysis?.title_zh?.trim() ? analysis.title_zh : null;
   const title = pickString(f.title, zhTitle ?? (isChineseTitle || article.x_post ? collapseWhitespace(article.title) : null));
-  const summary = pickString(f.summary, analysis?.summary_zh ?? null);
-  const category = pickString(f.category, analysis?.category ?? null);
-  const tags = Array.isArray(f.tags) ? (f.tags as string[]) : [...new Set([...(analysis?.tags ?? []), ...(analysis?.subjects ?? []).map((s) => `entity:${s}`)])];
-  const score = typeof f.score === "number" ? f.score : analysis?.score ?? null;
+  const referenceSummary = sourceText.slice(0, 420) || `业务关键词命中：${awardGate?.positiveHits.join("、")}。该结果公告仅作参考，不进行 AI 评分。`;
+  const summary = pickString(f.summary, analysis?.summary_zh ?? (awardReference ? referenceSummary : null));
+  const category = pickString(f.category, analysis?.category ?? (awardReference ? "general" : null));
+  const tags = Array.isArray(f.tags) ? (f.tags as string[]) : awardReference && !analysis
+    ? ["中标及结果"]
+    : [...new Set([...(analysis?.tags ?? []), ...(analysis?.subjects ?? []).map((s) => `entity:${s}`)])];
+  const score = awardResult ? null : typeof f.score === "number" ? f.score : analysis?.score ?? null;
   const relevance = typeof f.relevance === "string" ? (f.relevance as string) : analysis?.relevance ?? null;
-  const judgedSelected = typeof f.selected === "boolean" ? (f.selected as boolean) : analysis?.selected ?? null;
+  const businessMatch = analysis?.output?.businessMatch && typeof analysis.output.businessMatch === "object"
+    ? analysis.output.businessMatch as Record<string, unknown>
+    : null;
+  const selectionPolicy = businessMatch?.selectionPolicy && typeof businessMatch.selectionPolicy === "object"
+    ? businessMatch.selectionPolicy as Record<string, unknown>
+    : null;
+  const storedScoreMeetsThreshold = relevance === "pass" && analysis?.output?.deadlineStatus !== "passed"
+    && typeof score === "number" && typeof selectionPolicy?.featuredThreshold === "number"
+    && score >= selectionPolicy.featuredThreshold;
+  const judgedSelected = awardResult ? false : typeof f.selected === "boolean" ? (f.selected as boolean) : analysis?.selected === true || storedScoreMeetsThreshold;
   // Material from an isolated source reaches no public surface at all: not even a detail page.
   const maxAgeDays = Number(source.config?._aihot && typeof source.config._aihot === "object"
     ? (source.config._aihot as Record<string, unknown>).maxAgeDays ?? 0
@@ -188,12 +211,39 @@ export async function publishArticleTx(tx: Tx, articleId: string, options: Publi
   const stale = freshnessCutoff !== null && (article.published_at ?? article.discovered_at).getTime() < freshnessCutoff;
   const visibility = stale || source.participation_mode === "isolated" ? "withdrawn" : (override?.visibility ?? "public");
 
-  const eligible = !stale && isCurrentOpportunity({
-    itemType: typeof analysis?.output?.itemType === "string" ? analysis.output.itemType : null,
-    deadlineStatus: typeof analysis?.output?.deadlineStatus === "string" ? analysis.output.deadlineStatus : null,
-  }) && isPoolEligible({ participationMode: source.participation_mode, relevance, title, summary });
-  const selected = isSelectable(eligible, judgedSelected, source.tier);
-  const reason = selected ? pickString(f.reason, analysis?.reason_zh ?? null) : null;
+  const itemType = awardResult ? "award_result" : typeof analysis?.output?.itemType === "string" ? analysis.output.itemType : null;
+  const deadlineStatus = typeof analysis?.output?.deadlineStatus === "string" ? analysis.output.deadlineStatus : null;
+  const eligible = !stale && isCurrentOpportunity({ itemType, deadlineStatus }) && (awardResult
+    ? awardReference && source.participation_mode === "editorial" && !!title && !!summary
+    : isPoolEligible({ participationMode: source.participation_mode, relevance, title, summary }));
+  let regionalSelected = false;
+  const articleText = [article.title, article.excerpt, article.body_text].filter(Boolean).join("\n");
+  if (analysis && !awardResult && judgedSelected !== true && f.manualSelected !== true && typeof f.selected !== "boolean" && relevance === "pass"
+      && source.tier !== "EXCLUDE_MP" && deadlineStatus === "open" && articleText.includes("马鞍山") && businessMatch?.label === "PASS") {
+    const [rule] = await tx<{ value: { enabled?: boolean } }[]>`SELECT value FROM settings WHERE key = 'publication.maanshan_software_maintenance'`;
+    if (rule?.value?.enabled !== false) {
+      const profile = await loadBusinessProfile();
+      regionalSelected = isMaanshanSoftwareMaintenance({
+        enabled: true,
+        sourceTier: source.tier,
+        itemType,
+        deadlineStatus,
+        relevance: analysis.relevance,
+        negativeKeywordHit: businessNegativeKeywordClues({ title: article.title, excerpt: article.excerpt, bodyText: article.body_text }, profile).length > 0,
+        articleText,
+        businessMatch,
+      });
+    }
+  }
+  const selected = f.manualSelected === true
+    ? eligible && judgedSelected === true
+    : regionalSelected
+      ? eligible && source.tier !== "EXCLUDE_MP"
+      : isSelectable(eligible, judgedSelected, source.tier);
+  const reason = selected
+    ? regionalSelected ? "马鞍山软件运维特例：AI 业务 PASS，项目地域与软件运维证据通过，未命中排除词"
+      : pickString(f.reason, analysis?.reason_zh ?? null)
+    : null;
   const hasXPost = !!article.x_post;
   const channel = channelOf(source.kind, hasXPost);
   const bodyMode = bodyModeOf(source, article.body_status, !!article.body_text && article.body_text.length > 0);

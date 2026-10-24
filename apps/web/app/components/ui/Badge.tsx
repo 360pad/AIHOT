@@ -29,3 +29,15 @@ export function SelectedBadge() {
     </Badge>
   );
 }
+
+export function ManualSelectedBadge() {
+  return (
+    <Badge tone="accent" dot>
+      人工精选
+    </Badge>
+  );
+}
+
+export function RegionalRuleBadge() {
+  return <Badge tone="accent" title="该项目按已启用的马鞍山软件运维特例纳入精选">马鞍山特例</Badge>;
+}

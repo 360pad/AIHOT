@@ -9,7 +9,7 @@ import http from "node:http";
 import { after, test } from "node:test";
 import { config } from "@aihot/backend/config";
 import { sanitizeBody, trimTrailingChrome } from "@aihot/backend/content/sanitize";
-import { fetchDetail, fetchWebList, fromHtml, fromMarkdown } from "@aihot/backend/sources/web-list";
+import { fetchDetail, fetchWebList, fromHtml, fromMarkdown, parseAhtbaPageList } from "@aihot/backend/sources/web-list";
 import { fetchRss } from "@aihot/backend/sources/rss";
 import { fetchJsonList } from "@aihot/backend/sources/json-list";
 import { noiseFiltered } from "@aihot/backend/sources/collect";
@@ -43,6 +43,8 @@ const pages: Record<string, (cdn: string) => string> = {
   "/ld-post": () =>
     `<html><head><script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","name":"Blog"},` +
     `{"@type":"BlogPosting","headline":"Turn REST APIs into MCP tools","datePublished":"2026-09-24"}]}</script></head><body><p>Post</p></body></html>`,
+  "/external-detail": () => `<html><body><div id="divCon" data-url="/body-file.html"></div><p>detail shell</p></body></html>`,
+  "/body-file.html": () => `<div class="detailCon"><div><p><h2>采购公告正文</h2>${"完整公告正文包含项目任务、采购范围和响应要求。".repeat(20)}</div></div>`,
   "/cdn/static/js/lib-react.a6be410a.js": () => '"use strict";(self.webpackChunk=self.webpackChunk||[]).push([["lib-react"],{}]);',
   "/cdn/static/js/index.c5195ace.js": (cdn) =>
     '(()=>{var e={},a={};function t(d){return a[d]}t.u=e=>"static/js/async/"+e+"."+({6159:"4efb0769",7298:"a1b2c3d4",8557:"2d420be2"})[e]+".js",' +
@@ -142,6 +144,17 @@ test("config entries a source kind does not implement are named, not ignored", (
   );
   assert.deepEqual(unsupportedConfig("rss", { feedUrl: "https://example.org/feed", denyUrlPrefixes: ["https://example.org/business/"] }), []);
   assert.deepEqual(unsupportedConfig("x_search", { query: "from:a", allowUrlPrefixes: ["https://example.org/"] }), ["allowUrlPrefixes"], "X shards apply no URL rules");
+  assert.deepEqual(unsupportedConfig("web_list", { url: "https://www.ahtba.org.cn/", adapter: "ahtba_trade", tradeList: { tradeTypes: ["01", "02"], titleQueries: ["测绘", "档案数字化"], pageSize: 15, pages: 1, publishTimeType: "month" }, detail: { maxFetches: 30, bodyUrlSelector: "#divCon", bodyUrlAttribute: "data-url" } }), []);
+});
+
+test("AHTBA pageList fragments become deduplicated announcement links", () => {
+  const html = `<ul><li><a href="/site/trade/affiche/detail/abc">蚌山区行政区域界线测绘项目</a><span>2026-10-20</span></li>` +
+    `<li><a href="https://www.ahtba.org.cn/site/trade/affiche/detail/def">泗县河道设计咨询公告</a><span>2026-10-20</span></li>` +
+    `<li><a href="/site/trade/affiche/detail/abc">蚌山区行政区域界线测绘项目</a></li></ul>`;
+  const rows = parseAhtbaPageList(html, source({ allowUrlPrefixes: ["https://www.ahtba.org.cn/site/trade/affiche/detail/"] }));
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0]!.publishedAt?.toISOString(), "2026-10-20T00:00:00.000Z");
+  assert.equal(rows[1]!.title, "泗县河道设计咨询公告");
 });
 
 test("a listing that links other articles in its teasers takes only the links that begin a line", () => {
@@ -210,6 +223,16 @@ test("dates in yyyymmdd and in JSON-LD are read", async () => {
   assert.deepEqual(days.map((c) => c.publishedAt?.toISOString() ?? null), ["2026-09-22T00:00:00.000Z", null], "February 30 is no date");
   const got = await fetchDetail(`${site}/ld-post`, { id: "test-feed", config: { detail: { maxFetches: 20 } } } as never, { date: true, title: false, summary: false, body: false });
   assert.equal(got.publishedAt?.toISOString(), "2026-09-24T00:00:00.000Z");
+});
+
+test("body-only detail requests follow the site's external body file", async () => {
+  const got = await fetchDetail(`${site}/external-detail`, {
+    id: "test-detail-body-file",
+    config: { detail: { bodyUrlSelector: "#divCon[data-url]", bodyUrlAttribute: "data-url", bodyContentSelector: ".detailCon" } },
+  } as never, { date: false, title: false, summary: false, body: true });
+  assert.ok(got.body);
+  assert.match(got.body!.text, /完整公告正文包含项目任务/);
+  assert.equal(got.body!.via, "selector");
 });
 
 test("JSON list pagination reads bounded backfill pages", async () => {

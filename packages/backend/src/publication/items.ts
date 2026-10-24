@@ -17,6 +17,7 @@ export interface ItemRow {
   tags: string[];
   score: number | null;
   selected: boolean;
+  manual_selected: boolean;
   eligible: boolean;
   channel: "news" | "x";
   url: string;
@@ -53,7 +54,7 @@ export interface ItemRow {
 /** Columns every item listing selects. Internal judgement details never leave this layer. */
 export const ITEM_COLUMNS = sql`
   p.article_id AS id, p.revision, p.title, p.original_title, p.summary, p.reason, p.category, p.tags, p.score,
-  p.selected, p.eligible, p.channel, p.url, p.published_at, p.discovered_at, p.timeline_at, p.sort_at, p.first_party, p.visibility,
+  p.selected, coalesce((o.fields->>'manualSelected')::boolean, false) AS manual_selected, p.eligible, p.channel, p.url, p.published_at, p.discovered_at, p.timeline_at, p.sort_at, p.first_party, p.visibility,
   p.body_mode, p.syndicate, p.indexable, p.visible_after, p.backfill, p.fact_id, p.story_id,
   s.id AS source_id, s.name AS source_name, s.kind AS source_kind, s.participation_mode AS source_mode, s.icon_url AS source_icon,
   a.x_post, a.author, a.language,
@@ -72,6 +73,7 @@ export const ITEM_FROM = sql`
   FROM publications p
   JOIN sources s ON s.id = p.source_id
   JOIN articles a ON a.id = p.article_id
+  LEFT JOIN editorial_overrides o ON o.article_id = p.article_id
   LEFT JOIN stories st ON st.id = p.story_id AND st.merged_into IS NULL
   LEFT JOIN translations tr ON tr.article_id = p.article_id AND tr.lang = 'zh' AND tr.revision >= a.revision
   LEFT JOIN quote_translations qt ON p.channel = 'x' AND qt.tweet_id = substring(a.x_post->'quoted'->>'url' from '/status/([0-9]+)')`;
@@ -119,10 +121,13 @@ const STAGE_TAGS: Record<StageKey, string[]> = {
   award: ["中标及结果"],
 };
 
+const AWARD_RESULT_TITLE_PATTERN = "((中标|成交|中选)(候选(人|供应商|单位)?|人|供应商|单位|结果|通知书|公告|公示)(公告|公示)?|(采购|招标|评标)(中标|成交)?结果(公告|公示)?|(政府采购)?合同(公告|公示|备案))";
+
 /** Stage is stored in the analysis output today; tags keep older publications filterable. */
 export function stageCondition(stage: StageKey | null | undefined) {
   if (!stage) return sql``;
-  return sql`AND (
+  const awardTitle = sql`concat_ws(' ', p.title, p.original_title) ~ ${AWARD_RESULT_TITLE_PATTERN}`;
+  const stageMatch = sql`(
     EXISTS (
       SELECT 1 FROM analyses an
       WHERE an.id = p.analysis_id
@@ -130,6 +135,9 @@ export function stageCondition(stage: StageKey | null | undefined) {
     )
     OR p.tags && ${STAGE_TAGS[stage]}::text[]
   )`;
+  return stage === "award"
+    ? sql`AND (${stageMatch} OR ${awardTitle})`
+    : sql`AND NOT ${awardTitle} AND ${stageMatch}`;
 }
 
 function mediaView(m: Record<string, any>, mode: "card" | "thumb" | "full" = "thumb", responsive = false): MediaView | null {
@@ -197,6 +205,7 @@ export function toItemSummary(row: ItemRow): ItemSummary {
     tags: displayTags(row.tags),
     score: row.score === null ? null : Math.round(Number(row.score)),
     selected: row.selected,
+    manualSelected: row.manual_selected,
     channel: row.channel,
     story: row.story_public_id ? { publicId: row.story_public_id, title: row.story_title ?? "" } : null,
     x,
@@ -209,7 +218,7 @@ export function toFeedItemSummary(row: ItemRow): FeedItemSummary {
   return {
     id: item.id, title: item.title, summary: item.summary, reason: item.reason,
     source: { name: item.source.name }, publishedAt: item.publishedAt, timelineAt: item.timelineAt,
-    category: item.category, tags: item.tags, score: item.score, selected: item.selected, channel: item.channel,
+    category: item.category, tags: item.tags, score: item.score, selected: item.selected, manualSelected: item.manualSelected, channel: item.channel,
     x: item.x ? {
       authorName: item.x.authorName, handle: item.x.handle, avatarUrl: item.x.avatarUrl,
       ...(item.x.avatarSrcSet ? { avatarSrcSet: item.x.avatarSrcSet } : {}), media: item.x.media,

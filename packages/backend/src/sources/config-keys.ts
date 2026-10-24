@@ -10,14 +10,14 @@ const KEYS: Record<SourceRow["kind"], string[]> = {
   rss: [...COLLECTED, "feedUrl", "summaryIsBody", "preserveUrlFragment", "allowCategories", "denyCategories"],
   web_list: [
     ...COLLECTED, "url", "baseUrl", "parseMode", "adapter", "cacheToleranceSeconds", "linksStartLine", "preserveUrlFragment",
-    "itemSelector", "linkSelector", "titleSelector", "publishedAtSelector", "publishedAtRegex", "publishedAtUtcOffset",
+    "itemSelector", "linkSelector", "titleSelector", "publishedAtSelector", "publishedAtRegex", "publishedAtUtcOffset", "tradeList",
   ],
   json_list: [
     ...COLLECTED, "url", "mode", "method", "headers", "bodyJson", "bodyForm", "jsonKey", "windowVar", "itemsPath", "itemsObjectValues",
-    "jsonTextPath",
+    "jsonTextPath", "requestTimestampParam", "requestIntervalMs",
     "titlePaths", "summaryPaths", "summaryIsBody", "authorPaths", "publishedAtPath", "publishedAtUnit", "publishedAtUtcOffset", "externalIdPath",
     "urlTemplate", "urlTemplateFallback", "rawDropKeys", "requireBoolean", "minNumeric", "pagination",
-    "baseUrl", "htmlPath", "itemSelector", "linkSelector", "titleSelector", "publishedAtSelector", "publishedAtRegex",
+    "baseUrl", "htmlPath", "itemSelector", "linkSelector", "titleSelector", "publishedAtSelector", "publishedAtRegex", "detailApi",
   ],
   // X accounts are mostly read in shards, which apply only these.
   x_search: ["_aihot", "ingestNoiseFilter", "itemUrlPrefixRewrite", "query", "searchType"],
@@ -35,12 +35,14 @@ const NESTED: Record<string, string[]> = {
   pagination: ["location", "pageParam", "sizeParam", "pageSize", "start", "step", "pages", "firstImportPages", "stopWhenShort"],
   detail: [
     "maxFetches", "publishedAtSelector", "publishedAtRegex", "publishedAtUtcOffset", "publishedAtAuthoritative", "upgradeDatePrecision",
-    "titleSelector", "titleRegex", "titleAuthoritative", "summarySelector",
+    "titleSelector", "titleRegex", "titleAuthoritative", "summarySelector", "bodyUrlSelector", "bodyUrlAttribute", "bodyContentSelector",
   ],
+  detailApi: ["url", "idPath", "idParam", "contentPath", "summaryPath", "titlePath", "publishedAtPath", "publishedAtUnit", "publishedAtUtcOffset", "maxFetches", "method", "idLocation"],
+  tradeList: ["tradeTypes", "titleQueries", "pageSize", "pages", "publishTimeType"],
 };
 
 const VALUES: Record<string, string[]> = {
-  adapter: ["mimo_home"],
+  adapter: ["mimo_home", "ahtba_trade"],
   parseMode: ["html", "markdown", "docusaurus_changelog"],
   mode: ["html_window_var", "html_json_key", "html_json"],
 };

@@ -7,7 +7,8 @@ import { after, before, test } from "node:test";
 import { config } from "@aihot/backend/config";
 import { closeDb, sql } from "@aihot/backend/db";
 import { stopBoss } from "@aihot/backend/jobs/queue";
-import { collectXShard, scheduleDueSources } from "@aihot/backend/sources/collect";
+import { collectXShard } from "@aihot/backend/sources/collect";
+import { scheduleDueSources } from "@aihot/backend/sources/scheduler";
 import { planXShards, shardQuery } from "@aihot/backend/sources/x";
 
 const T = tag();

@@ -10,6 +10,8 @@ import { identityKeyForUrl } from "../lib/url.ts";
 import { mpArticle, mpHistory, type MpArticle } from "../providers/dajiala.ts";
 import { BudgetExceededError, ProviderRejectedError } from "../providers/receipts.ts";
 import { processingModeOf } from "./processing-mode.ts";
+import { nextScheduledAt, scheduleWindow } from "./schedule.ts";
+import { loadCollectionSchedule } from "./schedule-config.ts";
 
 const MAX_NEW_PER_CHECK = 8;
 /** Posts older than this on the first check of an account are history, not news. */
@@ -110,9 +112,10 @@ export async function checkMpAccount(sourceId: string, reason: "schedule" | "man
       }
     }
     const cursor = { ...(source.cursor ?? {}), lastCheckedAt: new Date().toISOString(), lastPostTime: posts[0]?.post_time ?? source.cursor?.lastPostTime ?? null, remainMoney: history.remainMoney };
+    const schedule = await loadCollectionSchedule();
     await sql`
       UPDATE sources SET last_fetch_at = now(), last_ok_at = now(), fail_count = 0, last_error = NULL, health = 'ok', cursor = ${sql.json(cursor as never)},
-        next_fetch_at = now() + make_interval(mins => interval_minutes), updated_at = now()
+        next_fetch_at = ${nextScheduledAt(new Date(), schedule.times, schedule)}, updated_at = now()
       WHERE id = ${sourceId}`;
     await sql`UPDATE fetch_runs SET status = 'ok', finished_at = now(), found_count = ${posts.length}, new_count = ${created} WHERE id = ${run!.id}`;
     return { sourceId, status: "ok" as const, found: posts.length, created, reused: history.reused };
@@ -130,15 +133,17 @@ export async function checkMpAccount(sourceId: string, reason: "schedule" | "man
   }
 }
 
-/** Every enabled account is checked once per its interval (the paid list call is the cost). */
+/** Paid account checks share the configured daily collection windows. */
 export async function scheduleMpReconcile(now = new Date()) {
-  const rows = await sql<{ id: string; last: string | null; interval_minutes: number }[]>`
-    SELECT id, cursor->>'lastCheckedAt' AS last, interval_minutes FROM sources WHERE kind = 'mp_account' AND enabled`;
+  const schedule = await loadCollectionSchedule();
+  const window = scheduleWindow(now, schedule.times, 60, schedule);
+  if (!window.active) return { enqueued: 0 };
+  const rows = await sql<{ id: string }[]>`
+    SELECT id FROM sources WHERE kind = 'mp_account' AND enabled AND (next_fetch_at IS NULL OR next_fetch_at <= ${now})`;
   let enqueued = 0;
   for (const s of rows) {
-    const since = s.last ? now.getTime() - Date.parse(s.last) : Infinity;
-    if (since <= s.interval_minutes * 60_000) continue;
     await enqueue(QUEUES.mpCheck, { sourceId: s.id, reason: "schedule" }, { singletonKey: `mp:${s.id}` });
+    await sql`UPDATE sources SET next_fetch_at = ${window.next} WHERE id = ${s.id}`;
     enqueued += 1;
   }
   return { enqueued };

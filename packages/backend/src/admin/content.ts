@@ -8,7 +8,9 @@ import { sql } from "../db.ts";
 import { enqueue, QUEUES } from "../jobs/queue.ts";
 import { queueProcessing } from "../jobs/content.ts";
 import { normalizeUrl } from "../lib/url.ts";
-import { publishArticle } from "../publication/publish.ts";
+import { publishArticle, publishArticleTx } from "../publication/publish.ts";
+import { isCurrentOpportunity } from "../publication/rules.ts";
+import { collapseWhitespace } from "../lib/text.ts";
 
 import { computeHotRanking } from "../events/hot.ts";
 import { mergeStoryInto } from "../events/merge.ts";
@@ -149,6 +151,61 @@ export async function overrideFields(id: string, input: { fields: unknown; clear
   }
   await audit(actor, "content.override", `content:${id}`, input.reason, before.fields, next);
   return published;
+}
+
+/** Human inclusion bypasses the AI selection threshold while preserving the saved analysis. */
+export async function manuallySelectArticle(id: string, version: number, actor: string) {
+  const result = await sql.begin(async (tx) => {
+    const [article] = await tx<{ id: string; title: string; language: string | null; excerpt: string | null; body_text: string | null; published_at: Date | null; discovered_at: Date; source_id: string }[]>`
+      SELECT id, title, language, excerpt, body_text, published_at, discovered_at, source_id FROM articles WHERE id = ${id} FOR UPDATE`;
+    if (!article) return null;
+    const [source] = await tx<{ participation_mode: string; config: Record<string, unknown> | null }[]>`
+      SELECT participation_mode, config FROM sources WHERE id = ${article.source_id}`;
+    if (!source || source.participation_mode !== "editorial") throw new Conflict("该信源不支持纳入精选");
+    const [analysis] = await tx<{ title_zh: string | null; summary_zh: string | null; output: Record<string, unknown> | null }[]>`
+      SELECT title_zh, summary_zh, output FROM analyses WHERE article_id = ${id} ORDER BY input_revision DESC, id DESC LIMIT 1`;
+    const [before] = await tx<{ fields: Record<string, unknown>; visibility: string | null; version: number }[]>`
+      SELECT fields, visibility, version FROM editorial_overrides WHERE article_id = ${id} FOR UPDATE`;
+    const currentVersion = before?.version ?? 0;
+    if (currentVersion !== version) throw new Conflict("这条内容的人工设置已被修改，请刷新后再操作");
+    if ((before?.visibility ?? "public") !== "public") throw new Conflict("该内容当前不是公开状态，不能纳入精选");
+    const maxAgeDays = Number(source.config?._aihot && typeof source.config._aihot === "object"
+      ? (source.config._aihot as Record<string, unknown>).maxAgeDays ?? 0
+      : 0);
+    const freshnessDate = article.published_at ?? article.discovered_at;
+    if (maxAgeDays > 0 && freshnessDate.getTime() < Date.now() - maxAgeDays * 86_400_000) throw new Conflict("该内容已超出信源公开期限，不能纳入精选");
+    if (!isCurrentOpportunity({
+      itemType: typeof analysis?.output?.itemType === "string" ? analysis.output.itemType : null,
+      deadlineStatus: typeof analysis?.output?.deadlineStatus === "string" ? analysis.output.deadlineStatus : null,
+    })) throw new Conflict("该招标信息的开标时间已过，不能纳入当前精选");
+    const title = analysis?.title_zh?.trim() || (/[\u3400-\u9fff]/u.test(article.title) ? collapseWhitespace(article.title) : "");
+    const summaryText = collapseWhitespace(analysis?.summary_zh || article.excerpt || article.body_text || "");
+    const summary = Array.from(summaryText).slice(0, 600).join("");
+    if (!title || !summary) throw new Conflict("缺少中文标题或摘要，暂时不能纳入精选");
+    const fields = {
+      ...(before?.fields ?? {}),
+      title,
+      summary,
+      reason: "人工复核确认值得关注，已纳入精选",
+      relevance: "pass",
+      selected: true,
+      manualSelected: true,
+    };
+    const written = await tx`
+      INSERT INTO editorial_overrides (article_id, fields, reason, version, updated_by)
+      VALUES (${id}, ${tx.json(fields as never)}, '人工复核纳入精选', 1, ${actor})
+      ON CONFLICT (article_id) DO UPDATE SET fields = EXCLUDED.fields, reason = EXCLUDED.reason,
+        version = editorial_overrides.version + 1, updated_by = EXCLUDED.updated_by, updated_at = now()
+      WHERE editorial_overrides.version = ${version}
+      RETURNING version`;
+    if (!written.count) throw new Conflict("这条内容的人工设置已被修改，请刷新后再操作");
+    const published = await publishArticleTx(tx, id);
+    if (!published?.selected || published.visibility !== "public") throw new Conflict("当前内容不满足公开精选条件");
+    return { before: before?.fields ?? {}, fields, published };
+  });
+  if (!result) return null;
+  await audit(actor, "content.manual-select", `content:${id}`, "人工复核纳入精选", result.before, result.fields);
+  return result.published;
 }
 
 /**

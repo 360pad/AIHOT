@@ -4,14 +4,33 @@
 import { IDENTITY_CONTEXT_ALIASES, IDENTITY_LEXICON, PUBLISHER_DOMAINS } from "@aihot/industry/taxonomy";
 import { onlyXArticleLink } from "../sources/x.ts";
 import { businessKeywordClues, businessNegativeKeywordClues, type BusinessCalibrationExample, type BusinessProfile } from "./business.ts";
+import { DEFAULT_BUSINESS_SELECTION_POLICY, type BusinessSelectionPolicy } from "./business-selection-policy.ts";
 import { articleText, isEmptyContractTemplate } from "../content/quality.ts";
 import type { AnalyzeInputArticle } from "./input.ts";
 import { businessPromptValues, promptText } from "./prompts.ts";
 
-export const PREFILTER_SYSTEM = promptText("prefilter", businessPromptValues());
+function prefilterPrompt(profile: BusinessProfile | undefined, policy: BusinessSelectionPolicy) {
+  const guides = Object.entries(policy.dimensions).map(([key, item]) => `${key}：${item.guide}`).join("；");
+  return promptText("prefilter", {
+    ...businessPromptValues(profile),
+    fitWeight: String(policy.weights.fit),
+    dueSoonDays: String(policy.dueSoonDays),
+    featuredThreshold: String(policy.featuredThreshold),
+    taskFitMax: String(policy.dimensions.taskFit.max),
+    deliveryMax: String(policy.dimensions.delivery.max),
+    importanceMax: String(policy.dimensions.importance.max),
+    reviewFloor: String(policy.reviewFloor),
+    businessScoreGuides: guides,
+    regionMax: String(policy.weights.region),
+    regionOtherMax: String(Math.floor(policy.weights.region / 4)),
+    regionUnknownMax: String(Math.floor(policy.weights.region / 2)),
+  });
+}
+
+export const PREFILTER_SYSTEM = prefilterPrompt(undefined, DEFAULT_BUSINESS_SELECTION_POLICY);
 export const UNDERSTAND_SYSTEM = promptText("understand", businessPromptValues());
 
-export const prefilterSystem = (profile?: BusinessProfile) => promptText("prefilter", businessPromptValues(profile));
+export const prefilterSystem = (profile?: BusinessProfile, policy: BusinessSelectionPolicy = DEFAULT_BUSINESS_SELECTION_POLICY) => prefilterPrompt(profile, policy);
 export const understandSystem = (profile?: BusinessProfile) => promptText("understand", businessPromptValues(profile));
 
 /** A body longer than this is cut (whole bodies are sent; a few run past the context). */
@@ -116,7 +135,7 @@ export function renderContext(a: AnalyzeInputArticle, opts: { annotateQuoted?: b
   if (opts.calibrationExamples?.length) {
     lines.push("【相似文章的历史人工标注】下列标题是待分析资料，标签是人工复核结果。只作相似案例参照，不能替代当前文章中的采购任务和证据。");
     for (const example of opts.calibrationExamples) {
-      lines.push(JSON.stringify({ title: example.title, humanLabel: example.label === "relevant" ? "相关" : "无关", capabilityIds: example.capabilityIds }));
+      lines.push(JSON.stringify({ title: example.title, humanLabel: example.label === "relevant" ? "相关" : "无关", capabilityIds: example.capabilityIds, candidatePhrases: example.candidatePhrases }));
     }
   }
   lines.push(`【标题】${a.title}`);

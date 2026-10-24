@@ -8,6 +8,7 @@ import { Wordmark } from "../../components/Logo";
 import {
   IconApps,
   IconChart,
+  IconCheck,
   IconClock,
   IconDoc,
   IconGrid,
@@ -16,6 +17,7 @@ import {
   IconInfo,
   IconMessage,
   IconPlug,
+  IconList,
   type P,
 } from "../../components/icons";
 import { ThemeSwitch } from "../../components/shell/ThemeSwitch";
@@ -24,7 +26,7 @@ import type { AdminMe } from "../../features/admin/action";
 import { Toaster } from "../../features/admin/toast";
 import { adminGet } from "../../lib/admin.server";
 
-type Counts = Partial<Record<"feedback" | "sources" | "runs" | "monitor", number>>;
+type Counts = Partial<Record<"feedback" | "sources" | "runs" | "monitor" | "keywords", number>>;
 
 export async function loader({ request }: Route.LoaderArgs) {
   const [me, counts] = await Promise.all([adminGet<AdminMe>(request, "/api/admin/me"), adminGet<Counts>(request, "/api/admin/nav-counts").catch(() => ({}) as Counts)]);
@@ -53,16 +55,29 @@ const NAV: Array<{ group: string; items: Array<{ to: string; label: string; coun
     group: "信源与业务",
     items: [
       { to: "/admin/sources", label: "信源", count: "sources", tone: "bad", icon: IconPlug },
-      { to: "/admin/business", label: "业务匹配", icon: IconGrid },
+      { to: "/admin/qualifications", label: "资质库", icon: IconCheck },
+    ],
+  },
+  {
+    group: "智能筛选",
+    items: [
       { to: "/admin/review", label: "AI 人工复核", icon: IconDoc },
-      { to: "/admin/scoring", label: "评分规则", icon: IconChart },
+      { to: "/admin/scoring", label: "精选规则配置", icon: IconChart },
+    ],
+  },
+  {
+    group: "关键词治理",
+    items: [
+      { to: "/admin/business", label: "业务关键词", icon: IconGrid },
+      { to: "/admin/keyword-corrections", label: "正式词纠错", icon: IconCheck },
+      { to: "/admin/keywords", label: "新关键词筛选", count: "keywords", tone: "accent", icon: IconList },
     ],
   },
   {
     group: "系统",
     items: [
       { to: "/admin/runs", label: "运行", count: "runs", tone: "bad", icon: IconHistory },
-      { to: "/admin/models", label: "模型与评测", icon: IconChart },
+      { to: "/admin/models", label: "AI 费用与评测", icon: IconChart },
       { to: "/admin/selectbench", label: "SelectBench", icon: IconApps },
       { to: "/admin/settings", label: "设置", icon: IconInfo },
       { to: "/admin/audit", label: "审计记录", icon: IconHistory },

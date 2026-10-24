@@ -124,11 +124,32 @@ export interface BusinessNegativeKeywordClue {
   term: string;
 }
 
+export interface AwardResultKeywordGate {
+  matched: boolean;
+  positiveHits: string[];
+  negativeHits: string[];
+}
+
+/** Award-result notices are kept as references only when an explicit business term hits. */
+export function awardResultKeywordGate(
+  a: Pick<AnalyzeInputArticle, "title" | "bodyText" | "excerpt">,
+  profile: BusinessProfile = BUSINESS_PROFILE,
+): AwardResultKeywordGate {
+  const text = [a.title, articleText(a.bodyText, a.excerpt)].filter(Boolean).join("\n").toLocaleLowerCase();
+  const positiveHits = [...new Set(profile.capabilities.filter((c) => c.enabled).flatMap((c) =>
+    [...c.semanticRoles.serviceActions, ...c.semanticRoles.methods, ...c.semanticRoles.deliverables]
+      .filter((term) => term.trim() && text.includes(term.toLocaleLowerCase()))))];
+  const negativeHits = [...new Set(profile.capabilities.filter((c) => c.enabled).flatMap((c) =>
+    c.reviewNegativeTerms.filter((term) => term.trim() && text.includes(term.toLocaleLowerCase()))))];
+  return { matched: positiveHits.length > 0 && negativeHits.length === 0, positiveHits, negativeHits };
+}
+
 export interface BusinessCalibrationExample {
   articleId: string;
   title: string;
   label: "relevant" | "irrelevant";
   capabilityIds: string[];
+  candidatePhrases: Array<{ phrase: string; capabilityId: string }>;
 }
 
 /** Keyword hits are context for the model only; callers must not use this as a business gate. */
@@ -168,12 +189,11 @@ export function businessNegativeKeywordClues(a: Pick<AnalyzeInputArticle, "title
 /** Uses recent, explicitly labeled articles as small, similar examples in future prefilter prompts. */
 export async function businessCalibrationExamples(a: Pick<AnalyzeInputArticle, "id" | "title" | "bodyText" | "excerpt">, profile: BusinessProfile): Promise<BusinessCalibrationExample[]> {
   const target = new Set(businessKeywordClues(a, profile).map((clue) => `${clue.capabilityId}:${clue.term.toLocaleLowerCase()}`));
-  if (!target.size) return [];
   const candidates = await sql<{
-    article_id: string; title: string; label: "relevant" | "irrelevant"; capability_ids: string[]; body_text: string | null; excerpt: string | null;
+    article_id: string; title: string; label: "relevant" | "irrelevant"; capability_ids: string[]; body_text: string | null; excerpt: string | null; original_result: Record<string, any> | null;
   }[]>`
-    SELECT article_id, title, label, capability_ids, body_text, excerpt FROM (
-      SELECT DISTINCT ON (f.article_id) f.article_id, a.title, f.label, f.capability_ids, a.body_text, a.excerpt, f.created_at
+    SELECT article_id, title, label, capability_ids, body_text, excerpt, original_result FROM (
+      SELECT DISTINCT ON (f.article_id) f.article_id, a.title, f.label, f.capability_ids, a.body_text, a.excerpt, f.original_result, f.created_at
       FROM business_matching_feedback f JOIN articles a ON a.id = f.article_id
       WHERE f.article_id IS NOT NULL AND f.article_id <> ${a.id}
       ORDER BY f.article_id, f.created_at DESC
@@ -181,8 +201,15 @@ export async function businessCalibrationExamples(a: Pick<AnalyzeInputArticle, "
   return candidates.map((candidate) => {
     const clues = businessKeywordClues({ title: candidate.title, bodyText: candidate.body_text, excerpt: candidate.excerpt }, profile);
     const overlap = clues.filter((clue) => target.has(`${clue.capabilityId}:${clue.term.toLocaleLowerCase()}`)).length;
-    return { example: { articleId: candidate.article_id, title: candidate.title, label: candidate.label, capabilityIds: candidate.capability_ids }, overlap };
-  }).filter((candidate) => candidate.overlap > 0)
+    const output = candidate.original_result?.output?.businessMatch;
+    const candidatePhrases = (Array.isArray(output?.projects) ? output.projects : []).flatMap((project: any) =>
+      (Array.isArray(project.tasks) ? project.tasks : []).flatMap((task: any) => {
+        const phrases = [task.name, task.action, task.object, ...(Array.isArray(task.deliverables) ? task.deliverables : [])].filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+        return candidate.capability_ids.flatMap((capabilityId: string) => phrases.map((phrase: string) => ({ phrase: phrase.trim(), capabilityId })));
+      }),
+    ).filter((item: { phrase: string; capabilityId: string }, index: number, all: Array<{ phrase: string; capabilityId: string }>) => all.findIndex((other) => other.phrase === item.phrase && other.capabilityId === item.capabilityId) === index).slice(0, 8);
+    return { example: { articleId: candidate.article_id, title: candidate.title, label: candidate.label, capabilityIds: candidate.capability_ids, candidatePhrases }, overlap };
+  })
     .sort((a, b) => b.overlap - a.overlap)
     .slice(0, 3)
     .map(({ example }) => example);

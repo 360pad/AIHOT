@@ -1,7 +1,7 @@
 import { SITE, withSubject } from "@aihot/industry/site";
 import { data as withHeaders, redirect, useLoaderData } from "react-router";
 import type { Route } from "./+types/home";
-import type { TimelineResponse } from "@aihot/contracts/site";
+import type { CollectionSummary, TimelineResponse } from "@aihot/contracts/site";
 import { isCategoryKey, isChannelKey, isStageKey, STAGE_LABELS, CATEGORY_LABELS } from "@aihot/contracts/taxonomy";
 import { loadOr404, queryString, releaseBoundCache } from "../lib/api.server";
 import { listPath, organizationLd, pageMeta } from "../lib/seo";
@@ -10,7 +10,7 @@ import { Timeline } from "../features/feed/Timeline";
 import { HotTopics } from "../features/feed/HotTopics";
 import { IndustryNav, SearchField, SearchIconLink, StageNav } from "../features/feed/Filters";
 import { IconChevronDown } from "../components/icons";
-import { beijingDate, beijingWeekday } from "../lib/format";
+import { beijingDate, beijingWeekday, monthDayTime } from "../lib/format";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
@@ -25,8 +25,11 @@ export async function loader({ request }: Route.LoaderArgs) {
   const stage = isStageKey(stageParam) ? stageParam : "tender";
   const tag = url.searchParams.get("tag")?.trim() || null;
   const upstream = new Headers();
-  const data = await loadOr404<TimelineResponse>(`/api/site/timeline${queryString({ channel: channel === "all" ? null : channel, category, stage, tag })}`, { responseHeaders: upstream, signal: request.signal });
-  return withHeaders({ data, filters: { channel, category, stage, tag, topic: null } }, { headers: releaseBoundCache(data.refreshAt, 60, Date.now(), upstream) });
+  const [data, collection] = await Promise.all([
+    loadOr404<TimelineResponse>(`/api/site/timeline${queryString({ channel: channel === "all" ? null : channel, category, stage, tag })}`, { responseHeaders: upstream, signal: request.signal }),
+    loadOr404<CollectionSummary>("/api/site/collection-summary", { signal: request.signal }),
+  ]);
+  return withHeaders({ data, collection, filters: { channel, category, stage, tag, topic: null } }, { headers: releaseBoundCache(data.refreshAt, 30, Date.now(), upstream) });
 }
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -50,7 +53,7 @@ function TodayLabel() {
 }
 
 export default function Home() {
-  const { data, filters } = useLoaderData<typeof loader>();
+  const { data, collection, filters } = useLoaderData<typeof loader>();
   const stage = filters.stage ?? "tender";
   const title = filters.tag ? `#${filters.tag}` : STAGE_LABELS[stage];
   const industry = filters.category ? CATEGORY_LABELS[filters.category] : "全部行业";
@@ -79,8 +82,8 @@ export default function Home() {
                 <p className="radar-home-subtitle">发现与业务相关的在招项目</p>
               </div>
               <div className="radar-refresh-copy">
-                <span>每日 08:00、17:00 更新</span>
-                <span>最近更新：10月12日 17:00</span>
+                <span>采集计划：{collection.times.join("、")}（北京时间）</span>
+                <span>{collection.lastSourceSuccessAt ? `最近信源成功：${monthDayTime(collection.lastSourceSuccessAt)}` : "暂无成功采集记录"}</span>
               </div>
             </div>
             <div className="radar-toolbar">

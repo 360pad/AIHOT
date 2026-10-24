@@ -1,0 +1,2 @@
+ALTER TABLE business_keyword_governance_drafts
+  ADD COLUMN preserved_profile_draft_pointer jsonb;

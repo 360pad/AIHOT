@@ -1,5 +1,5 @@
 {
-  "$comment": "首次启动导入的已验证公开信源。中央政府采购网、全国公共资源交易平台、江苏政府采购网采购意向/公告/结果 API，以及安徽16个地市官方公共资源交易门户的列表/API入口已于 2026-10-10 核验；只展示摘要和原文链接。",
+  "$comment": "首次启动导入的已验证公开信源。中央政府采购网、全国公共资源交易平台、江苏政府采购网采购意向/公告/结果 API，以及安徽16个地市官方公共资源交易门户的列表/API入口已于 2026-10-10 核验；浙江省公共资源交易服务平台及浙江政府采购网全省11市接口已于 2026-10-24 核验；只展示摘要和原文链接。",
   "sources": [
     {
       "id": "web-ccgp-central-announcements",
@@ -262,6 +262,69 @@
         "马鞍山",
         "公共资源交易",
         "政府采购"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "json-mas-ggzy-procurement-notices",
+      "name": "马鞍山市公共资源交易中心·采购公示",
+      "kind": "json_list",
+      "config": {
+        "url": "https://zbcg.mas.gov.cn/EpointWebBuilder_new/rest/secaction/getSecInfoListYzm",
+        "method": "POST",
+        "headers": {
+          "user-agent": "Mozilla/5.0",
+          "referer": "https://zbcg.mas.gov.cn/masggzynew/cggs/notice_cggs.html"
+        },
+        "bodyForm": {
+          "siteGuid": "7eb5f7f1-9041-43ad-8e13-8fcb82ea831a",
+          "categoryNum": "033",
+          "content": ""
+        },
+        "itemsPath": "custom.infodata",
+        "titlePaths": [
+          "title"
+        ],
+        "summaryPaths": [
+          "secondtitle"
+        ],
+        "publishedAtPath": "startdate",
+        "publishedAtUtcOffset": "+08:00",
+        "externalIdPath": "infoid",
+        "urlTemplate": "https://zbcg.mas.gov.cn{raw:infourl}",
+        "allowUrlPrefixes": [
+          "https://zbcg.mas.gov.cn/masggzynew/cggs/"
+        ],
+        "sortByPublishedAt": true,
+        "pagination": {
+          "location": "bodyForm",
+          "pageParam": "pageindex",
+          "sizeParam": "pagesize",
+          "pageSize": 20,
+          "start": 0,
+          "step": 1,
+          "pages": 1,
+          "firstImportPages": 1,
+          "stopWhenShort": true
+        },
+        "_aihot": {
+          "initialBackfillLimit": 20,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "官方平台",
+        "安徽",
+        "马鞍山",
+        "公共资源交易",
+        "标前公示",
+        "单一来源公示"
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false
@@ -807,13 +870,26 @@
       "config": {
         "url": "https://www.ahtba.org.cn/",
         "baseUrl": "https://www.ahtba.org.cn/",
-        "itemSelector": "ul#lawTrade_A01 > li",
-        "linkSelector": "a[href*=\"/site/trade/affiche/detail/\"]",
-        "titleSelector": "a[href*=\"/site/trade/affiche/detail/\"]",
-        "publishedAtSelector": "span.fr",
+        "adapter": "ahtba_trade",
+        "tradeList": {
+          "tradeTypes": ["01", "02"],
+          "titleQueries": [
+            "档案数字化", "档案扫描", "测绘", "地籍调查", "三维建模",
+            "数字孪生", "信息系统", "水利安全监测", "入河排污口"
+          ],
+          "pageSize": 15,
+          "pages": 1,
+          "publishTimeType": "month"
+        },
         "allowUrlPrefixes": [
           "https://www.ahtba.org.cn/site/trade/affiche/detail/"
         ],
+        "detail": {
+          "maxFetches": 30,
+          "bodyUrlSelector": "#divCon[data-url]",
+          "bodyUrlAttribute": "data-url",
+          "bodyContentSelector": ".detailCon"
+        },
         "_aihot": {
           "initialBackfillLimit": 20,
           "maxAgeDays": 30
@@ -853,6 +929,17 @@
         "publishedAtPath": "publishDate",
         "publishedAtUtcOffset": "+08:00",
         "externalIdPath": "id",
+        "detailApi": {
+          "url": "http://www.ccgp-jiangsu.gov.cn/pss/jsp/relevantCgggGetById.jsp",
+          "idPath": "raw.externalId",
+          "idParam": "ggid",
+          "titlePath": "data.title",
+          "publishedAtPath": "data.publishDate",
+          "publishedAtUtcOffset": "+08:00",
+          "contentPath": "data.content",
+          "summaryPath": "data.summary",
+          "maxFetches": 7
+        },
         "urlTemplate": "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html?gglb={ggCode}&ggid={id}",
         "allowUrlPrefixes": [
           "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"
@@ -896,6 +983,17 @@
         "publishedAtPath": "publishDate",
         "publishedAtUtcOffset": "+08:00",
         "externalIdPath": "id",
+        "detailApi": {
+          "url": "http://www.ccgp-jiangsu.gov.cn/pss/jsp/relevantCgggGetById.jsp",
+          "idPath": "raw.externalId",
+          "idParam": "ggid",
+          "titlePath": "data.title",
+          "publishedAtPath": "data.publishDate",
+          "publishedAtUtcOffset": "+08:00",
+          "contentPath": "data.content",
+          "summaryPath": "data.summary",
+          "maxFetches": 30
+        },
         "urlTemplate": "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html?gglb={ggCode}&ggid={id}",
         "allowUrlPrefixes": [
           "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"
@@ -982,6 +1080,17 @@
         "publishedAtPath": "publishDate",
         "publishedAtUtcOffset": "+08:00",
         "externalIdPath": "id",
+        "detailApi": {
+          "url": "http://www.ccgp-jiangsu.gov.cn/pss/jsp/relevantCgggGetById.jsp",
+          "idPath": "raw.externalId",
+          "idParam": "ggid",
+          "titlePath": "data.title",
+          "publishedAtPath": "data.publishDate",
+          "publishedAtUtcOffset": "+08:00",
+          "contentPath": "data.content",
+          "summaryPath": "data.summary",
+          "maxFetches": 7
+        },
         "urlTemplate": "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html?gglb={ggCode}&ggid={id}",
         "allowUrlPrefixes": [
           "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"
@@ -1026,6 +1135,17 @@
         "publishedAtPath": "publishDate",
         "publishedAtUtcOffset": "+08:00",
         "externalIdPath": "id",
+        "detailApi": {
+          "url": "http://www.ccgp-jiangsu.gov.cn/pss/jsp/relevantCgggGetById.jsp",
+          "idPath": "raw.externalId",
+          "idParam": "ggid",
+          "titlePath": "data.title",
+          "publishedAtPath": "data.publishDate",
+          "publishedAtUtcOffset": "+08:00",
+          "contentPath": "data.content",
+          "summaryPath": "data.summary",
+          "maxFetches": 7
+        },
         "urlTemplate": "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html?gglb={ggCode}&ggid={id}",
         "allowUrlPrefixes": [
           "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"
@@ -1070,6 +1190,17 @@
         "publishedAtPath": "publishDate",
         "publishedAtUtcOffset": "+08:00",
         "externalIdPath": "id",
+        "detailApi": {
+          "url": "http://www.ccgp-jiangsu.gov.cn/pss/jsp/relevantCgggGetById.jsp",
+          "idPath": "raw.externalId",
+          "idParam": "ggid",
+          "titlePath": "data.title",
+          "publishedAtPath": "data.publishDate",
+          "publishedAtUtcOffset": "+08:00",
+          "contentPath": "data.content",
+          "summaryPath": "data.summary",
+          "maxFetches": 30
+        },
         "urlTemplate": "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html?gglb={ggCode}&ggid={id}",
         "allowUrlPrefixes": [
           "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"
@@ -1114,6 +1245,17 @@
         "publishedAtPath": "publishDate",
         "publishedAtUtcOffset": "+08:00",
         "externalIdPath": "id",
+        "detailApi": {
+          "url": "http://www.ccgp-jiangsu.gov.cn/pss/jsp/relevantCgggGetById.jsp",
+          "idPath": "raw.externalId",
+          "idParam": "ggid",
+          "titlePath": "data.title",
+          "publishedAtPath": "data.publishDate",
+          "publishedAtUtcOffset": "+08:00",
+          "contentPath": "data.content",
+          "summaryPath": "data.summary",
+          "maxFetches": 30
+        },
         "urlTemplate": "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html?gglb={ggCode}&ggid={id}",
         "allowUrlPrefixes": [
           "http://www.ccgp-jiangsu.gov.cn/jiangsu/js_cggg/details.html"
@@ -1237,9 +1379,11 @@
         "headers": {
           "x-requested-with": "XMLHttpRequest"
         },
+        "requestTimestampParam": "_t",
+        "requestIntervalMs": 1200,
         "bodyJson": {
           "pageNo": 1,
-          "pageSize": 100,
+          "pageSize": 15,
           "categoryCode": "ZcyAnnouncement1",
           "districtCode": [
             "340000"
@@ -1256,6 +1400,18 @@
         "publishedAtPath": "publishDate",
         "publishedAtUnit": "epoch_ms",
         "externalIdPath": "articleId",
+        "detailApi": {
+          "url": "https://www.ccgp-anhui.gov.cn/portal/detail",
+          "method": "GET",
+          "idLocation": "query",
+          "idPath": "raw.externalId",
+          "idParam": "articleId",
+          "titlePath": "result.data.title",
+          "publishedAtPath": "result.data.publishDate",
+          "publishedAtUnit": "epoch_ms",
+          "contentPath": "result.data.content",
+          "maxFetches": 30
+        },
         "urlTemplate": "https://www.ccgp-anhui.gov.cn/site/detail?parentId=oJCosldFbaJFzmyFhz1c6Q%3D%3D&articleId={articleId}",
         "allowUrlPrefixes": [
           "https://www.ccgp-anhui.gov.cn/site/detail"
@@ -1265,10 +1421,10 @@
           "location": "bodyJson",
           "pageParam": "pageNo",
           "sizeParam": "pageSize",
-          "pageSize": 100,
+          "pageSize": 15,
           "start": 1,
           "step": 1,
-          "pages": 1,
+          "pages": 7,
           "firstImportPages": 15,
           "stopWhenShort": true
         },
@@ -1301,9 +1457,11 @@
         "headers": {
           "x-requested-with": "XMLHttpRequest"
         },
+        "requestTimestampParam": "_t",
+        "requestIntervalMs": 1200,
         "bodyJson": {
           "pageNo": 1,
-          "pageSize": 100,
+          "pageSize": 15,
           "categoryCode": "ZcyAnnouncement2",
           "districtCode": [
             "340000"
@@ -1320,6 +1478,18 @@
         "publishedAtPath": "publishDate",
         "publishedAtUnit": "epoch_ms",
         "externalIdPath": "articleId",
+        "detailApi": {
+          "url": "https://www.ccgp-anhui.gov.cn/portal/detail",
+          "method": "GET",
+          "idLocation": "query",
+          "idPath": "raw.externalId",
+          "idParam": "articleId",
+          "titlePath": "result.data.title",
+          "publishedAtPath": "result.data.publishDate",
+          "publishedAtUnit": "epoch_ms",
+          "contentPath": "result.data.content",
+          "maxFetches": 30
+        },
         "urlTemplate": "https://www.ccgp-anhui.gov.cn/site/detail?parentId=oJCosldFbaJFzmyFhz1c6Q%3D%3D&articleId={articleId}",
         "allowUrlPrefixes": [
           "https://www.ccgp-anhui.gov.cn/site/detail"
@@ -1329,10 +1499,10 @@
           "location": "bodyJson",
           "pageParam": "pageNo",
           "sizeParam": "pageSize",
-          "pageSize": 100,
+          "pageSize": 15,
           "start": 1,
           "step": 1,
-          "pages": 1,
+          "pages": 7,
           "firstImportPages": 15,
           "stopWhenShort": true
         },
@@ -1737,20 +1907,77 @@
     },
     {
       "id": "web-zhejiang-ggzy-tenders",
-      "name": "浙江省公共资源交易服务平台·招标公告",
-      "kind": "web_list",
+      "name": "浙江省公共资源交易服务平台·全省11市招标公告",
+      "kind": "json_list",
       "config": {
-        "url": "https://ggzy.zj.gov.cn/",
-        "baseUrl": "https://ggzy.zj.gov.cn/",
-        "itemSelector": "li.list-view-cell",
-        "linkSelector": "a[href*='/jyxxgk/002001/002001001/']",
-        "titleSelector": "a[href*='/jyxxgk/002001/002001001/']",
+        "url": "https://ggzy.zj.gov.cn/inteligentsearch/rest/esinteligentsearch/getFullTextDataNew",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "Mozilla/5.0"
+        },
+        "bodyJson": {
+          "token": "",
+          "pn": 0,
+          "rn": 20,
+          "sdt": "",
+          "edt": "",
+          "wd": "",
+          "inc_wd": "",
+          "exc_wd": "",
+          "fields": "title",
+          "cnum": "001",
+          "sort": "{\"webdate\":\"0\"}",
+          "ssort": "title",
+          "cl": 200,
+          "terminal": "",
+          "condition": [
+            {
+              "fieldName": "categorynum",
+              "isLike": true,
+              "likeType": 2,
+              "equal": "002001001"
+            }
+          ],
+          "time": null,
+          "highlights": "",
+          "statistics": null,
+          "unionCondition": null,
+          "accuracy": "",
+          "noParticiple": "0",
+          "searchRange": null,
+          "isBusiness": "1"
+        },
+        "itemsPath": "result.records",
+        "titlePaths": [
+          "titlenew",
+          "title"
+        ],
+        "summaryPaths": [
+          "content"
+        ],
+        "summaryIsBody": true,
+        "publishedAtPath": "webdate",
+        "publishedAtUtcOffset": "+08:00",
+        "externalIdPath": "infoid",
+        "urlTemplate": "https://ggzy.zj.gov.cn{raw:linkurl}",
         "allowUrlPrefixes": [
           "https://ggzy.zj.gov.cn/jyxxgk/002001/002001001/"
         ],
+        "pagination": {
+          "location": "bodyJson",
+          "pageParam": "pn",
+          "sizeParam": "rn",
+          "pageSize": 20,
+          "start": 0,
+          "step": 20,
+          "pages": 1,
+          "firstImportPages": 2,
+          "stopWhenShort": true
+        },
         "sortByPublishedAt": true,
         "_aihot": {
-          "initialBackfillLimit": 20,
+          "initialBackfillLimit": 100,
           "maxAgeDays": 30
         }
       },
@@ -1763,7 +1990,222 @@
         "官方",
         "浙江",
         "公共资源交易",
-        "招标公告"
+        "招标公告",
+        "杭州",
+        "宁波",
+        "温州",
+        "嘉兴",
+        "湖州",
+        "绍兴",
+        "金华",
+        "衢州",
+        "舟山",
+        "台州",
+        "丽水"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-zhejiang-ggzy-tender-candidates",
+      "name": "浙江省公共资源交易服务平台·全省11市中标候选人公示",
+      "kind": "json_list",
+      "config": {
+        "url": "https://ggzy.zj.gov.cn/inteligentsearch/rest/esinteligentsearch/getFullTextDataNew",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "Mozilla/5.0"
+        },
+        "bodyJson": {
+          "token": "",
+          "pn": 0,
+          "rn": 20,
+          "sdt": "",
+          "edt": "",
+          "wd": "",
+          "inc_wd": "",
+          "exc_wd": "",
+          "fields": "title",
+          "cnum": "001",
+          "sort": "{\"webdate\":\"0\"}",
+          "ssort": "title",
+          "cl": 200,
+          "terminal": "",
+          "condition": [
+            {
+              "fieldName": "categorynum",
+              "isLike": true,
+              "likeType": 2,
+              "equal": "002001004"
+            }
+          ],
+          "time": null,
+          "highlights": "",
+          "statistics": null,
+          "unionCondition": null,
+          "accuracy": "",
+          "noParticiple": "0",
+          "searchRange": null,
+          "isBusiness": "1"
+        },
+        "itemsPath": "result.records",
+        "titlePaths": [
+          "titlenew",
+          "title"
+        ],
+        "summaryPaths": [
+          "content"
+        ],
+        "summaryIsBody": true,
+        "publishedAtPath": "webdate",
+        "publishedAtUtcOffset": "+08:00",
+        "externalIdPath": "infoid",
+        "urlTemplate": "https://ggzy.zj.gov.cn{raw:linkurl}",
+        "allowUrlPrefixes": [
+          "https://ggzy.zj.gov.cn/jyxxgk/002001/002001004/"
+        ],
+        "pagination": {
+          "location": "bodyJson",
+          "pageParam": "pn",
+          "sizeParam": "rn",
+          "pageSize": 20,
+          "start": 0,
+          "step": 20,
+          "pages": 1,
+          "firstImportPages": 2,
+          "stopWhenShort": true
+        },
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 100,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "官方",
+        "浙江",
+        "公共资源交易",
+        "中标候选人公示",
+        "杭州",
+        "宁波",
+        "温州",
+        "嘉兴",
+        "湖州",
+        "绍兴",
+        "金华",
+        "衢州",
+        "舟山",
+        "台州",
+        "丽水"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-zhejiang-ggzy-tender-results",
+      "name": "浙江省公共资源交易服务平台·全省11市中标结果公告",
+      "kind": "json_list",
+      "config": {
+        "url": "https://ggzy.zj.gov.cn/inteligentsearch/rest/esinteligentsearch/getFullTextDataNew",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "Mozilla/5.0"
+        },
+        "bodyJson": {
+          "token": "",
+          "pn": 0,
+          "rn": 20,
+          "sdt": "",
+          "edt": "",
+          "wd": "",
+          "inc_wd": "",
+          "exc_wd": "",
+          "fields": "title",
+          "cnum": "001",
+          "sort": "{\"webdate\":\"0\"}",
+          "ssort": "title",
+          "cl": 200,
+          "terminal": "",
+          "condition": [
+            {
+              "fieldName": "categorynum",
+              "isLike": true,
+              "likeType": 2,
+              "equal": "002001005"
+            }
+          ],
+          "time": null,
+          "highlights": "",
+          "statistics": null,
+          "unionCondition": null,
+          "accuracy": "",
+          "noParticiple": "0",
+          "searchRange": null,
+          "isBusiness": "1"
+        },
+        "itemsPath": "result.records",
+        "titlePaths": [
+          "titlenew",
+          "title"
+        ],
+        "summaryPaths": [
+          "content"
+        ],
+        "summaryIsBody": true,
+        "publishedAtPath": "webdate",
+        "publishedAtUtcOffset": "+08:00",
+        "externalIdPath": "infoid",
+        "urlTemplate": "https://ggzy.zj.gov.cn{raw:linkurl}",
+        "allowUrlPrefixes": [
+          "https://ggzy.zj.gov.cn/jyxxgk/002001/002001005/"
+        ],
+        "pagination": {
+          "location": "bodyJson",
+          "pageParam": "pn",
+          "sizeParam": "rn",
+          "pageSize": 20,
+          "start": 0,
+          "step": 20,
+          "pages": 1,
+          "firstImportPages": 2,
+          "stopWhenShort": true
+        },
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 100,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "官方",
+        "浙江",
+        "公共资源交易",
+        "中标结果",
+        "杭州",
+        "宁波",
+        "温州",
+        "嘉兴",
+        "湖州",
+        "绍兴",
+        "金华",
+        "衢州",
+        "舟山",
+        "台州",
+        "丽水"
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
@@ -2070,7 +2512,7 @@
     },
     {
       "id": "web-zhejiang-procurement-pending",
-      "name": "浙江政府采购网·采购项目公告",
+      "name": "浙江政府采购网·全省11市采购项目公告",
       "kind": "json_list",
       "config": {
         "url": "https://zfcg.czt.zj.gov.cn/portal/searchHome",
@@ -2123,7 +2565,120 @@
         "浙江",
         "政府采购",
         "采购项目公告",
-        "JSON接口"
+        "JSON接口",
+        "杭州",
+        "宁波",
+        "温州",
+        "嘉兴",
+        "湖州",
+        "绍兴",
+        "金华",
+        "衢州",
+        "舟山",
+        "台州",
+        "丽水"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-zhejiang-ggzy-procurement-results",
+      "name": "浙江省公共资源交易服务平台·全省11市政府采购中标成交公告",
+      "kind": "json_list",
+      "config": {
+        "url": "https://ggzy.zj.gov.cn/inteligentsearch/rest/esinteligentsearch/getFullTextDataNew",
+        "method": "POST",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "Mozilla/5.0"
+        },
+        "bodyJson": {
+          "token": "",
+          "pn": 0,
+          "rn": 20,
+          "sdt": "",
+          "edt": "",
+          "wd": "",
+          "inc_wd": "",
+          "exc_wd": "",
+          "fields": "title",
+          "cnum": "001",
+          "sort": "{\"webdate\":\"0\"}",
+          "ssort": "title",
+          "cl": 200,
+          "terminal": "",
+          "condition": [
+            {
+              "fieldName": "categorynum",
+              "isLike": true,
+              "likeType": 2,
+              "equal": "002002002"
+            }
+          ],
+          "time": null,
+          "highlights": "",
+          "statistics": null,
+          "unionCondition": null,
+          "accuracy": "",
+          "noParticiple": "0",
+          "searchRange": null,
+          "isBusiness": "1"
+        },
+        "itemsPath": "result.records",
+        "titlePaths": [
+          "titlenew",
+          "title"
+        ],
+        "summaryPaths": [
+          "content"
+        ],
+        "summaryIsBody": true,
+        "publishedAtPath": "webdate",
+        "publishedAtUtcOffset": "+08:00",
+        "externalIdPath": "infoid",
+        "urlTemplate": "https://ggzy.zj.gov.cn{raw:linkurl}",
+        "allowUrlPrefixes": [
+          "https://ggzy.zj.gov.cn/jyxxgk/002002/002002002/"
+        ],
+        "pagination": {
+          "location": "bodyJson",
+          "pageParam": "pn",
+          "sizeParam": "rn",
+          "pageSize": 20,
+          "start": 0,
+          "step": 20,
+          "pages": 1,
+          "firstImportPages": 2,
+          "stopWhenShort": true
+        },
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 100,
+          "maxAgeDays": 30
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "官方",
+        "浙江",
+        "政府采购",
+        "中标成交公告",
+        "杭州",
+        "宁波",
+        "温州",
+        "嘉兴",
+        "湖州",
+        "绍兴",
+        "金华",
+        "衢州",
+        "舟山",
+        "台州",
+        "丽水"
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,

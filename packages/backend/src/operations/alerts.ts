@@ -188,7 +188,7 @@ export async function collectFindings(now = Date.now()): Promise<Finding[]> {
   return out;
 }
 
-const MODEL_STOPS = "用到这家模型的步骤停了（看后台“模型与评测”），新内容可能进不了精选";
+const MODEL_STOPS = "用到这家模型的步骤停了（看后台“AI 费用与评测”），新内容可能进不了精选";
 const PROVIDERS: Record<string, { name: string; stops: string; where: string }> = {
   llm: { name: "默认模型服务", stops: "新文章的精选、摘要、归组和日报停了", where: "模型服务商的控制台" },
   zhipu: { name: "智谱", stops: MODEL_STOPS, where: "智谱开放平台" },

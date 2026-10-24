@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BUSINESS_PROFILE, businessKeywordClues, businessNegativeKeywordClues } from "@aihot/backend/editorial/business";
+import { resolveBusinessJudgement } from "@aihot/backend/editorial/business-selection-policy";
 import type { AnalyzeInputArticle } from "@aihot/backend/editorial/input";
-import { renderContext } from "@aihot/backend/editorial/writing";
+import { PREFILTER_SYSTEM, renderContext } from "@aihot/backend/editorial/writing";
 
 test("the manual-review keyword lane exposes positive hits and exact negative hits separately", () => {
   const relevant = { title: "地下管线测量及空间数据建库服务", bodyText: "空间数据成果交付", excerpt: null };
@@ -113,10 +114,26 @@ test("future prefilter prompts include human labels as similar examples without 
     source: { name: "测试信源", kind: "web_list", tier: "T1", firstParty: true },
   };
   const context = renderContext(article, { businessProfile: BUSINESS_PROFILE, calibrationExamples: [
-    { articleId: "human-labeled-1", title: "人工标注的水库测绘项目", label: "relevant", capabilityIds: ["surveying-spatial-data"] },
+    { articleId: "human-labeled-1", title: "人工标注的水库测绘项目", label: "relevant", capabilityIds: ["surveying-spatial-data"], candidatePhrases: [{ phrase: "水库测绘", capabilityId: "surveying-spatial-data" }] },
   ] });
   assert.match(context, /相似文章的历史人工标注/);
   assert.match(context, /人工标注的水库测绘项目/);
   assert.match(context, /humanLabel.*相关/);
   assert.match(context, /【正文】[\s\S]*采购水库三维测绘及成果建库服务/);
+});
+
+test("business PASS, UNKNOWN and BLOCK follow the same evidence, score and deadline decision", () => {
+  const base = { modelLabel: "UNKNOWN" as const, deadlineStatus: "open" as const, score: 52, reviewFloor: 30, hasMatchedTask: false, hasMaterial: true };
+  assert.equal(resolveBusinessJudgement({ ...base, hasMatchedTask: true }), "PASS", "verified same-task match can resolve a model UNKNOWN as PASS");
+  assert.equal(resolveBusinessJudgement(base), "UNKNOWN", "high score without verified task evidence stays reviewable");
+  assert.equal(resolveBusinessJudgement({ ...base, score: 10, modelLabel: "PASS" }), "UNKNOWN", "an unsupported model PASS is never silently accepted");
+  assert.equal(resolveBusinessJudgement({ ...base, score: 10, modelLabel: "BLOCK", hasMaterial: false }), "UNKNOWN", "a block without readable material is retryable");
+  assert.equal(resolveBusinessJudgement({ ...base, score: 10, modelLabel: "BLOCK" }), "BLOCK", "clear unrelated content can be discarded");
+  assert.equal(resolveBusinessJudgement({ ...base, deadlineStatus: "passed", hasMatchedTask: true }), "BLOCK", "an expired opportunity is always discarded");
+});
+
+test("the prefilter extracts only explicit company and personnel credential requirements without changing relevance", () => {
+  assert.match(PREFILTER_SYSTEM, /qualificationRequirements/);
+  assert.match(PREFILTER_SYSTEM, /"company\|personnel"/);
+  assert.match(PREFILTER_SYSTEM, /不得改变这些结论/);
 });

@@ -6,7 +6,7 @@ import { IntentLink } from "../../components/ui/IntentLink";
 import type { GroupInfo, FeedItemSummary, TimelineFilters } from "@aihot/contracts/site";
 import { CATEGORY_LABELS, STAGE_LABELS } from "@aihot/contracts/taxonomy";
 import { IconChevronRight, IconDoc, IconGrid } from "../../components/icons";
-import { SelectedBadge } from "../../components/ui/Badge";
+import { ManualSelectedBadge, RegionalRuleBadge, SelectedBadge } from "../../components/ui/Badge";
 import { ScoreLabel } from "../../components/ui/Score";
 import { MediaThumbs, SourceLine, StarButton } from "./parts";
 import { GroupDevelopments, GroupSources, LatestDevelopment } from "./ReadingGroup";
@@ -41,9 +41,10 @@ export const FeedItem = memo(function FeedItem({ item, group, filters, read = fa
         <SourceLine item={item} className="text-ink-4" />
         {item.selected && (
           <span className="hidden lg:inline-flex">
-            <SelectedBadge />
+            {item.manualSelected ? <ManualSelectedBadge /> : <SelectedBadge />}
           </span>
         )}
+        {item.selected && item.reason?.startsWith("马鞍山软件运维特例：") && <RegionalRuleBadge />}
         <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-2">
           <span className="hidden lg:inline-flex">
             <ScoreLabel score={item.score} />

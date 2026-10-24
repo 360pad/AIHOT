@@ -137,6 +137,32 @@ async function upsertIn(db: Db, m: MaterialInput): Promise<MaterialResult> {
   const t = decideTimeline(m.publishedAt, discoveredAt, m.backfill);
   const newId = m.id ?? newArticleId();
   const hash = contentHash({ title, bodyText: m.bodyText, excerpt: m.excerpt });
+  const body = collapseWhitespace(m.bodyText ?? "");
+  const observedAt = m.publishedAt && Number.isFinite(m.publishedAt.getTime()) ? m.publishedAt : discoveredAt;
+  if (m.via === "fetch") {
+    const lockKeys = [
+      `article-title:${title.toLocaleLowerCase()}:${observedAt.toISOString().slice(0, 10)}`,
+      ...(body.length >= 500 ? [`article-body:${sha256(body)}`] : []),
+    ].sort();
+    for (const key of lockKeys) await db`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
+    const [duplicate] = await db<{ id: string; backfill: boolean }[]>`
+      SELECT a.id, a.backfill FROM articles a
+      JOIN sources duplicate_source ON duplicate_source.id = a.source_id
+      JOIN sources incoming_source ON incoming_source.id = ${m.sourceId}
+      WHERE a.identity_key <> ${identityKey}
+        AND (a.source_id = incoming_source.id OR duplicate_source.participation_mode = incoming_source.participation_mode)
+        AND (a.content_hash = ${hash}
+          OR (${body.length >= 500} AND a.source_id <> ${m.sourceId}
+            AND btrim(regexp_replace(coalesce(a.body_text, ''), '[[:space:]]+', ' ', 'g')) = ${body}))
+        AND coalesce(a.published_at, a.discovered_at) BETWEEN ${new Date(observedAt.getTime() - 72 * 3600_000)}
+          AND ${new Date(observedAt.getTime() + 72 * 3600_000)}
+      ORDER BY a.discovered_at, a.id LIMIT 1`;
+    if (duplicate) {
+      await db`INSERT INTO article_discoveries (article_id, source_id, via, discovered_at)
+               VALUES (${duplicate.id}, ${m.sourceId}, ${m.via}, ${discoveredAt}) ON CONFLICT DO NOTHING`;
+      return { articleId: duplicate.id, created: false, revised: false, backfill: duplicate.backfill };
+    }
+  }
   const [inserted] = await db<{ id: string }[]>`
     INSERT INTO articles (id, source_id, identity_key, url, title, author, language, published_at, published_at_claim,
       discovered_at, source_updated_at, timeline_at, backfill, backfill_reason, revision, content_hash, excerpt,

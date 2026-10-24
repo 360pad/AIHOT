@@ -7,6 +7,7 @@ import { sql } from "../db.ts";
 import { sha256, stableJson } from "../lib/ids.ts";
 import { audit } from "./auth.ts";
 import { BUSINESS_PROFILE, businessProfileVersion, invalidateBusinessProfileCache } from "../editorial/business.ts";
+import { loadBusinessSelectionPolicy } from "../editorial/business-selection-policy.ts";
 import { enqueue, QUEUES } from "../jobs/queue.ts";
 
 const DRAFT_KEY = "business_profile.draft";
@@ -62,6 +63,7 @@ const FeedbackSchema = z.object({
   evidenceQuality: z.enum(["clear", "limited", "insufficient"]).nullable().optional(),
   note: z.string().max(2000).nullable().optional(),
 }).strict();
+const KeywordCandidateActionSchema = z.object({ action: z.enum(["stage", "reject"]), note: z.string().max(500).optional() }).strict();
 
 type Pointer = { versionId: string; revision: number };
 type VersionRow = { id: string; content_hash: string; profile: BusinessProfile; status: string; created_by: string; created_at: Date; published_at: Date | null };
@@ -149,6 +151,8 @@ export async function saveBusinessProfileDraft(input: { profile: unknown; expect
     const [row] = await tx<{ value: Pointer }[]>`SELECT value FROM settings WHERE key = ${DRAFT_KEY} FOR UPDATE`;
     const previous = row?.value ?? null;
     if ((previous?.revision ?? 0) !== input.expectedRevision) throw new Conflict("业务配置草稿已被其他窗口修改，请刷新后再保存");
+    if (previous?.versionId) await tx`UPDATE business_keyword_candidates SET status = 'pending', profile_version_id = NULL, reviewed_by = NULL, reviewed_at = NULL
+      WHERE status = 'staged' AND profile_version_id = ${previous.versionId}`;
     await tx`INSERT INTO business_profile_versions (id, content_hash, profile, status, created_by) VALUES (${versionId}, ${hash}, ${tx.json(profile as never)}, 'draft', ${actor})`;
     await tx`INSERT INTO settings (key, value, updated_by) VALUES (${DRAFT_KEY}, ${tx.json({ versionId, revision: nextRevision })}, ${actor})
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`;
@@ -171,6 +175,8 @@ export async function publishBusinessProfile(input: { versionId?: string; expect
     await tx`UPDATE business_profile_versions SET status = 'published', published_at = coalesce(published_at, now()) WHERE id = ${versionId}`;
     await tx`INSERT INTO settings (key, value, updated_by) VALUES (${CURRENT_KEY}, ${tx.json({ versionId, revision: draft.revision })}, ${actor})
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`;
+    await tx`UPDATE business_keyword_candidates SET status = 'accepted', reviewed_by = ${actor}, reviewed_at = now()
+      WHERE status = 'staged' AND profile_version_id = ${versionId}`;
   });
   await audit(actor, "business.profile.publish", `business-profile:${versionId}`, input.reason, current, { versionId, revision: draft.revision });
   invalidateBusinessProfileCache();
@@ -226,26 +232,139 @@ export async function saveBusinessMatchingFeedback(input: unknown, actor: string
   const parsed = FeedbackSchema.parse(input);
   if (!parsed.testId && !parsed.articleId && !parsed.caseId) throw new Error("testId、articleId 或 caseId 至少填写一项");
   let originalResult: unknown = null;
+  let candidates: Array<{ kind: "positive" | "negative"; phrase: string; capabilityId: string; role: string; evidenceSource: "title" | "body"; evidence: string }> = [];
+  let profile: BusinessProfile | null = null;
   if (parsed.testId) {
     const [test] = await sql<{ result: unknown }[]>`SELECT result FROM business_matching_tests WHERE id = ${parsed.testId}`;
     if (!test) return null;
     originalResult = test.result;
   }
   if (parsed.articleId) {
-    const [article] = await sql<{ id: string; title: string; relevance: string | null; score: number | null; selected: boolean | null; output: unknown }[]>`
-      SELECT a.id, a.title, an.relevance, an.score, an.selected, an.output
+    const [article] = await sql<{ id: string; title: string; excerpt: string | null; body_text: string | null; relevance: string | null; score: number | null; selected: boolean | null; output: Record<string, any> | null }[]>`
+      SELECT a.id, a.title, a.excerpt, a.body_text, an.relevance, an.score, an.selected, an.output
       FROM articles a LEFT JOIN LATERAL (
         SELECT relevance, score, selected, output FROM analyses WHERE article_id = a.id ORDER BY id DESC LIMIT 1
       ) an ON true WHERE a.id = ${parsed.articleId}`;
     if (!article) return null;
     originalResult = { title: article.title, relevance: article.relevance, score: article.score, selected: article.selected, output: article.output };
+    if (parsed.label !== "unknown") {
+      profile = (await businessProfile()).draftProfile?.profile ?? null;
+      if (profile) {
+        const source = article.body_text || article.excerpt || "";
+        const searchText = `${article.title}\n${source}`;
+        const lowerText = searchText.toLocaleLowerCase();
+        const selectedIds = new Set(parsed.capabilityIds);
+        const capabilityById = new Map(profile.capabilities.filter((item) => item.enabled).map((item) => [item.id, item]));
+        const proposal = new Map<string, (typeof candidates)[number]>();
+        const genericCandidatePhrases = new Set(["采购", "采购项目", "项目", "项目采购", "服务", "采购服务", "服务项目", "招标", "招标公告", "公开招标", "竞争性磋商", "系统", "平台", "建设", "运维", "维护", "开发", "实施", "运营", "供应", "工作"]);
+        const businessScore = Number(article.output?.businessScore?.total ?? article.output?.businessMatch?.businessScore?.total ?? article.output?.scoreBreakdown?.business ?? -1);
+        const selectionPolicy = parsed.label === "irrelevant" ? await loadBusinessSelectionPolicy() : null;
+        const allowNegative = !!selectionPolicy && businessScore >= selectionPolicy.reviewHighFloor;
+        const add = (kind: "positive" | "negative", phraseValue: unknown, capabilityId: string, role: string) => {
+          const phrase = typeof phraseValue === "string" ? phraseValue.trim().replace(/\s+/g, " ") : "";
+          const capability = capabilityById.get(capabilityId);
+          if (!capability || !selectedIds.has(capabilityId) || phrase.length < 2 || phrase.length > 80 || genericCandidatePhrases.has(phrase.toLocaleLowerCase())) return;
+          const at = lowerText.indexOf(phrase.toLocaleLowerCase());
+          if (at < 0) return;
+          const existingPositive = [...capability.serviceTerms, ...capability.methodTerms, ...capability.deliverableTerms].some((term) => term.toLocaleLowerCase() === phrase.toLocaleLowerCase());
+          const existingNegative = capability.negativeKeywords.some((term) => term.toLocaleLowerCase() === phrase.toLocaleLowerCase());
+          if ((kind === "positive" && existingPositive) || (kind === "negative" && existingNegative)) return;
+          const titleAt = article.title.toLocaleLowerCase().indexOf(phrase.toLocaleLowerCase());
+          const evidenceSource = titleAt >= 0 ? "title" : "body";
+          const evidenceText = evidenceSource === "title" ? article.title : source;
+          const evidenceAt = evidenceText.toLocaleLowerCase().indexOf(phrase.toLocaleLowerCase());
+          const start = Math.max(0, evidenceAt - 70);
+          const evidence = evidenceText.slice(start, Math.min(evidenceText.length, evidenceAt + phrase.length + 70)).trim();
+          const key = `${kind}:${capabilityId}:${phrase.toLocaleLowerCase()}`;
+          proposal.set(key, { kind, phrase, capabilityId, role, evidenceSource, evidence });
+        };
+        const projects = article.output?.businessMatch?.projects as Array<{ tasks?: Array<{ name?: string; action?: string; deliverables?: string[]; matches?: Array<{ capabilityId: string }> }> }> | undefined;
+        if (Array.isArray(projects)) for (const project of projects) for (const task of project?.tasks ?? []) {
+          const matchedIds = parsed.label === "relevant"
+            ? [...selectedIds]
+            : [...new Set((task?.matches ?? []).map((match) => String(match?.capabilityId ?? "")).filter((id) => selectedIds.has(id)))];
+          for (const capabilityId of matchedIds) {
+            if (parsed.label === "relevant") {
+              add("positive", task?.name, capabilityId, "serviceAction");
+              add("positive", task?.action, capabilityId, "serviceAction");
+              for (const deliverable of task?.deliverables ?? []) add("positive", deliverable, capabilityId, "deliverable");
+            } else if (allowNegative) {
+              add("negative", task?.name, capabilityId, "negative");
+              add("negative", task?.action, capabilityId, "negative");
+              for (const deliverable of task?.deliverables ?? []) add("negative", deliverable, capabilityId, "negative");
+            }
+          }
+        }
+        if (allowNegative) {
+          for (const capabilityId of selectedIds) {
+            const capability = capabilityById.get(capabilityId);
+            if (!capability) continue;
+            for (const term of [...capability.serviceTerms, ...capability.methodTerms, ...capability.deliverableTerms]) add("negative", term, capabilityId, "negative");
+          }
+        }
+        candidates = [...proposal.values()];
+      }
+    }
   }
-  const [row] = await sql`
-    INSERT INTO business_matching_feedback (test_id, article_id, case_id, label, capability_ids, participation, evidence_quality, note, original_result, created_by)
-    VALUES (${parsed.testId ?? null}, ${parsed.articleId ?? null}, ${parsed.caseId ?? null}, ${parsed.label}, ${parsed.capabilityIds}, ${parsed.participation ?? null}, ${parsed.evidenceQuality ?? null}, ${parsed.note ?? null}, ${sql.json(originalResult as never)}, ${actor})
-    RETURNING id, test_id, article_id, case_id, label, capability_ids, participation, evidence_quality, note, created_by, created_at`;
+  const [row] = await sql.begin(async (tx) => {
+    const [feedback] = await tx`
+      INSERT INTO business_matching_feedback (test_id, article_id, case_id, label, capability_ids, participation, evidence_quality, note, original_result, created_by)
+      VALUES (${parsed.testId ?? null}, ${parsed.articleId ?? null}, ${parsed.caseId ?? null}, ${parsed.label}, ${parsed.capabilityIds}, ${parsed.participation ?? null}, ${parsed.evidenceQuality ?? null}, ${parsed.note ?? null}, ${tx.json(originalResult as never)}, ${actor})
+      RETURNING id, test_id, article_id, case_id, label, capability_ids, participation, evidence_quality, note, created_by, created_at`;
+    if (parsed.articleId) for (const candidate of candidates) await tx`INSERT INTO business_keyword_candidates
+      (article_id, feedback_id, kind, phrase, capability_id, role, evidence_source, evidence, created_by)
+      VALUES (${parsed.articleId}, ${feedback!.id}, ${candidate.kind}, ${candidate.phrase}, ${candidate.capabilityId}, ${candidate.role}, ${candidate.evidenceSource}, ${candidate.evidence}, ${actor})
+      ON CONFLICT (article_id, kind, phrase, capability_id) DO NOTHING`;
+    return [feedback];
+  });
   await audit(actor, "business.matching.feedback", parsed.testId ? `business-test:${parsed.testId}` : `business-case:${parsed.caseId ?? parsed.articleId}`, null, originalResult, row);
   return row;
 }
 
-export const businessMatchingSchemas = { BusinessProfileSchema, TestInputSchema, FeedbackSchema };
+export async function listBusinessKeywordCandidates() {
+  const [draft] = await sql<{ value: Pointer }[]>`SELECT value FROM settings WHERE key = ${DRAFT_KEY}`;
+  const rows = await sql`SELECT c.id, c.article_id AS "articleId", a.title, a.url, c.kind, c.phrase, c.capability_id AS "capabilityId",
+      c.role, c.evidence_source AS "evidenceSource", c.evidence, c.created_at AS "createdAt", c.created_by AS "createdBy"
+    FROM business_keyword_candidates c JOIN articles a ON a.id = c.article_id
+    WHERE c.status = 'pending' ORDER BY c.created_at DESC, c.id DESC LIMIT 100`;
+  return { rows, draftRevision: draft?.value.revision ?? 0 };
+}
+
+export async function reviewBusinessKeywordCandidate(candidateId: number, input: unknown, actor: string) {
+  const parsed = KeywordCandidateActionSchema.parse(input);
+  const result = await sql.begin(async (tx) => {
+    const [candidate] = await tx<any[]>`SELECT * FROM business_keyword_candidates WHERE id = ${candidateId} FOR UPDATE`;
+    if (!candidate || candidate.status !== "pending") return null;
+    if (parsed.action === "reject") {
+      await tx`UPDATE business_keyword_candidates SET status = 'rejected', reviewed_by = ${actor}, review_note = ${parsed.note ?? null}, reviewed_at = now() WHERE id = ${candidateId}`;
+      return { response: { id: candidateId, status: "rejected" }, action: "business.keyword-candidate.reject", before: candidate, after: { status: "rejected" } };
+    }
+    const [draftRow] = await tx<{ value: Pointer }[]>`SELECT value FROM settings WHERE key = ${DRAFT_KEY} FOR UPDATE`;
+    const draft = draftRow?.value;
+    if (!draft) throw new Error("业务配置草稿不存在");
+    const [versionRow] = await tx<{ profile: BusinessProfile }[]>`SELECT profile FROM business_profile_versions WHERE id = ${draft.versionId}`;
+    if (!versionRow) throw new Error("业务配置草稿版本不存在");
+    const profile = BusinessProfileSchema.parse(versionRow.profile);
+    const capability = profile.capabilities.find((item) => item.id === candidate.capability_id);
+    if (!capability) throw new Error("候选词关联的业务能力已不存在，请先驳回或重新判读");
+    const target = candidate.kind === "negative" ? capability.negativeKeywords : candidate.role === "method" ? capability.methodTerms : candidate.role === "deliverable" ? capability.deliverableTerms : capability.serviceTerms;
+    if (!target.some((term) => term.toLocaleLowerCase() === candidate.phrase.toLocaleLowerCase())) target.push(candidate.phrase);
+    const nextProfile = BusinessProfileSchema.parse(profile);
+    const contentHash = sha256(stableJson(nextProfile));
+    const versionId = id("bp");
+    const revision = draft.revision + 1;
+    await tx`INSERT INTO business_profile_versions (id, content_hash, profile, status, created_by)
+      VALUES (${versionId}, ${contentHash}, ${tx.json(nextProfile as never)}, 'draft', ${actor})`;
+    await tx`INSERT INTO settings (key, value, updated_by) VALUES (${DRAFT_KEY}, ${tx.json({ versionId, revision })}, ${actor})
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`;
+    await tx`UPDATE business_keyword_candidates SET profile_version_id = ${versionId}
+      WHERE status = 'staged' AND profile_version_id = ${draft.versionId}`;
+    await tx`UPDATE business_keyword_candidates SET status = 'staged', profile_version_id = ${versionId}, reviewed_by = ${actor}, review_note = ${parsed.note ?? null}, reviewed_at = now() WHERE id = ${candidateId}`;
+    return { response: { id: candidateId, status: "staged", versionId, revision }, action: "business.keyword-candidate.stage", before: draft, after: { versionId, revision, phrase: candidate.phrase, kind: candidate.kind } };
+  });
+  if (!result) return null;
+  await audit(actor, result.action, `business-keyword-candidate:${candidateId}`, parsed.note ?? (parsed.action === "reject" ? "人工驳回候选词" : "加入业务配置草稿"), result.before, result.after);
+  return result.response;
+}
+
+export const businessMatchingSchemas = { BusinessProfileSchema, TestInputSchema, FeedbackSchema, KeywordCandidateActionSchema };

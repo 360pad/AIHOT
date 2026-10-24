@@ -5,16 +5,19 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { actorOf } from "@aihot/backend/admin/auth";
 
 import { annotateSelectBenchCase, importSelectBenchRun, listSelectBenchRuns, selectBenchRun } from "@aihot/backend/admin/selectbench";
-import { businessMatchingTest, businessProfile, createBusinessMatchingTest, listBusinessMatchingTests, publishBusinessProfile, rollbackBusinessProfile, saveBusinessMatchingFeedback, saveBusinessProfileDraft } from "@aihot/backend/admin/business-matching";
-import { listArticleReviews } from "@aihot/backend/admin/review";
+import { businessMatchingTest, businessProfile, createBusinessMatchingTest, listBusinessKeywordCandidates, listBusinessMatchingTests, publishBusinessProfile, reviewBusinessKeywordCandidate, rollbackBusinessProfile, saveBusinessMatchingFeedback, saveBusinessProfileDraft } from "@aihot/backend/admin/business-matching";
+import { bulkMarkLowScoreIrrelevant, listArticleReviews, lowScoreIrrelevancePreview } from "@aihot/backend/admin/review";
+import { createBusinessQualification, deleteBusinessQualification, listBusinessQualifications, updateBusinessQualification } from "@aihot/backend/admin/qualifications";
+import { businessKeywordHitFrequency, collectBusinessKeywordSamples, createBusinessKeywordDraft, createBusinessKeywordOfficialChange, getBusinessKeywordSample, getBusinessKeywordTerm, keywordGovernanceDraft, keywordGovernanceLibrary, keywordGovernanceOverview, listBusinessKeywordOfficialChanges, listBusinessKeywordOfficialConflicts, listBusinessKeywordSamples, listBusinessKeywordTerms, publishBusinessKeywordDraft, replayBusinessKeywordDraft, reviewBusinessKeywordTerm, rollbackBusinessKeywordLibrary } from "@aihot/backend/admin/keyword-governance";
 import { getScoringPolicy, updateScoringPolicy } from "@aihot/backend/admin/scoring-policy";
+import { getBusinessSelectionPolicy, updateBusinessSelectionPolicy } from "@aihot/backend/admin/business-selection-policy";
 import { modelsOverview, switchModel } from "@aihot/backend/admin/models";
 
-import { contentChain, detachFromFact, mergeStories, overrideFields, rerun, searchContent, setSeoIndexed, setVisibility } from "@aihot/backend/admin/content";
+import { contentChain, detachFromFact, manuallySelectArticle, mergeStories, overrideFields, rerun, searchContent, setSeoIndexed, setVisibility } from "@aihot/backend/admin/content";
 import { banSource, eraseFeedback, feedbackScreenshot, listFeedback, unbanSource, updateFeedback } from "@aihot/backend/admin/feedback";
 import { listMonitorEvents, listMonitorPosts, relinkPost, resolveMonitorPost, reviewReceipt, setWithdrawn, updateMonitorEvent } from "@aihot/backend/admin/monitor";
 import { releaseReceipt, requeueFailedArticles, resolveDelivery, runsOverview } from "@aihot/backend/admin/runs";
-import { getCollectionSchedule, listBudgets, listTargets, replaceContactQr, setTargetEnabled, updateBudget, updateCollectionSchedule } from "@aihot/backend/admin/settings";
+import { getCollectionSchedule, getMaanshanRule, listBudgets, listTargets, replaceContactQr, setTargetEnabled, updateBudget, updateCollectionSchedule, updateMaanshanRule } from "@aihot/backend/admin/settings";
 import { collectionStatus, createSource, fetchNow, fetchScheduledNow, listSources, previewSource, sourceDetail, updateSource } from "@aihot/backend/admin/sources";
 import { sql } from "@aihot/backend/db";
 import { loadContact } from "@aihot/backend/site/contact";
@@ -57,11 +60,37 @@ export function registerAdmin(app: FastifyInstance) {
 
   // Content and events (F19)
   app.get("/api/admin/content", adminHandler(async (req) => ({ rows: await searchContent(q(req).q ?? "") })));
-  app.get("/api/admin/review", adminHandler(async (req) => listArticleReviews({ q: q(req).q, filter: q(req).filter, days: q(req).days === undefined ? 30 : Number(q(req).days), page: page(req) })));
+  app.get("/api/admin/review", adminHandler(async (req) => listArticleReviews({ q: q(req).q, filter: q(req).filter, humanStatus: q(req).humanStatus, days: q(req).days === undefined ? 30 : Number(q(req).days), page: page(req), runSlot: q(req).runSlot })));
+  app.get("/api/admin/review/bulk-preview", adminHandler(async (req) => lowScoreIrrelevancePreview(Number(q(req).days ?? 1))));
+  app.post("/api/admin/review/bulk-mark-irrelevant", adminHandler(async (req, _reply, admin) => {
+    const b = body<{ days?: number; expectedCount?: number }>(req);
+    return bulkMarkLowScoreIrrelevant({ days: Number(b.days ?? 1), expectedCount: Number(b.expectedCount) }, actorOf(admin));
+  }));
+  app.get("/api/admin/qualifications", adminHandler(async (req) => {
+    const category = q(req).category;
+    return listBusinessQualifications(category === "company" || category === "personnel" ? category : undefined);
+  }));
+  app.post("/api/admin/qualifications", adminHandler(async (req, _reply, admin) => createBusinessQualification(body(req), actorOf(admin))));
+  app.patch("/api/admin/qualifications/:id", adminHandler(async (req, reply, admin) => orNotFound(req, reply, await updateBusinessQualification(Number(param(req, "id")), body(req), actorOf(admin)))));
+  app.delete("/api/admin/qualifications/:id", adminHandler(async (req, reply, admin) => orNotFound(req, reply, await deleteBusinessQualification(Number(param(req, "id")), actorOf(admin)))));
+  app.post("/api/admin/review/:id/feature", adminHandler(async (req, reply, admin) => {
+    const b = body<{ version: number }>(req);
+    return orNotFound(req, reply, await manuallySelectArticle(param(req, "id"), Number(b.version), actorOf(admin)));
+  }));
   app.get("/api/admin/scoring-policy", adminHandler(async () => getScoringPolicy()));
   app.put("/api/admin/scoring-policy", adminHandler(async (req, _reply, admin) => {
     const b = body<{ weights: unknown; dueSoonDays?: unknown; reason: string }>(req);
     return updateScoringPolicy({ weights: b.weights, dueSoonDays: b.dueSoonDays, reason: String(b.reason ?? "") }, actorOf(admin));
+  }));
+  app.get("/api/admin/business-selection-policy", adminHandler(async () => getBusinessSelectionPolicy()));
+  app.put("/api/admin/business-selection-policy", adminHandler(async (req, _reply, admin) => {
+    const b = body<{ policy: unknown; reason: string }>(req);
+    return updateBusinessSelectionPolicy({ policy: b.policy, reason: String(b.reason ?? "") }, actorOf(admin));
+  }));
+  app.get("/api/admin/maanshan-rule", adminHandler(async () => getMaanshanRule()));
+  app.put("/api/admin/maanshan-rule", adminHandler(async (req, _reply, admin) => {
+    const b = body<{ enabled: boolean; reason: string }>(req);
+    return updateMaanshanRule({ enabled: !!b.enabled, reason: String(b.reason ?? "") }, actorOf(admin));
   }));
   app.get("/api/admin/content/:id", adminHandler(async (req, reply) => orNotFound(req, reply, await contentChain(param(req, "id")))));
   app.post("/api/admin/content/:id/visibility", adminHandler(async (req, _reply, admin) => setVisibility(param(req, "id"), body(req) as never, actorOf(admin))));
@@ -117,8 +146,8 @@ export function registerAdmin(app: FastifyInstance) {
   // Settings
   app.get("/api/admin/settings", adminHandler(async () => ({ contact: await loadContact(), targets: await listTargets(), budgets: await listBudgets(), collectionSchedule: await getCollectionSchedule(), collectionStatus: await collectionStatus() })));
   app.put("/api/admin/collection-schedule", adminHandler(async (req, _reply, admin) => {
-    const b = body<{ times: unknown; reason: string }>(req);
-    return updateCollectionSchedule({ times: b.times, reason: String(b.reason ?? "") }, actorOf(admin));
+    const b = body<{ times: unknown; skipPublicHolidays?: unknown; calendar?: unknown; reason: string }>(req);
+    return updateCollectionSchedule({ times: b.times, skipPublicHolidays: b.skipPublicHolidays, calendar: b.calendar, reason: String(b.reason ?? "") }, actorOf(admin));
   }));
   app.post("/api/admin/settings/contact-qr", adminHandler(async (req, _reply, admin) => {
     const b = body<{ slot: "wechatQr" | "feishuQr"; image: string }>(req);
@@ -168,7 +197,11 @@ export function registerAdmin(app: FastifyInstance) {
   }));
   app.post("/api/admin/business/profile/rollback", adminHandler(async (req, reply, admin) => {
     const b = body<{ versionId: string; reason: string }>(req);
-    return orNotFound(req, reply, await rollbackBusinessProfile(String(b.versionId ?? ""), String(b.reason ?? ""), actorOf(admin)));
+    return orNotFound(req, reply, await rollbackBusinessKeywordLibrary(String(b.versionId ?? ""), String(b.reason ?? ""), actorOf(admin)));
+  }));
+  app.get("/api/admin/business/keyword-candidates", adminHandler(async () => listBusinessKeywordCandidates()));
+  app.post("/api/admin/business/keyword-candidates/:id", adminHandler(async (req, reply, admin) => {
+    return orNotFound(req, reply, await reviewBusinessKeywordCandidate(Number(param(req, "id")), body(req), actorOf(admin)));
   }));
   app.get("/api/admin/business/tests", adminHandler(async () => ({ tests: await listBusinessMatchingTests() })));
   app.get("/api/admin/business/tests/:id", adminHandler(async (req, reply) => orNotFound(req, reply, await businessMatchingTest(param(req, "id")))));
@@ -180,6 +213,31 @@ export function registerAdmin(app: FastifyInstance) {
     return orNotFound(req, reply, await saveBusinessMatchingFeedback(body(req), actorOf(admin)));
   }));
 
+  // Keyword governance: labeled samples -> deduplicated terms -> candidate pool -> replayable draft -> formal JSON profile.
+  app.get("/api/admin/keywords/overview", adminHandler(async () => keywordGovernanceOverview()));
+  app.get("/api/admin/keywords/samples", adminHandler(async (req) => listBusinessKeywordSamples({ q: q(req).q, label: q(req).label, page: page(req) })));
+  app.get("/api/admin/keywords/samples/:id", adminHandler(async (req, reply) => orNotFound(req, reply, await getBusinessKeywordSample(Number(param(req, "id"))))));
+  app.post("/api/admin/keywords/samples/collect", adminHandler(async (_req, _reply, admin) => collectBusinessKeywordSamples(actorOf(admin))));
+  app.get("/api/admin/keywords/frequency", adminHandler(async (req) => businessKeywordHitFrequency({ q: q(req).q, kind: q(req).kind })));
+  app.get("/api/admin/keywords/official-conflicts", adminHandler(async () => ({ terms: await listBusinessKeywordOfficialConflicts() })));
+  app.get("/api/admin/keywords/official-changes", adminHandler(async (req) => ({ changes: await listBusinessKeywordOfficialChanges(q(req).status ?? "candidate") })));
+  app.post("/api/admin/keywords/official-changes", adminHandler(async (req, _reply, admin) => createBusinessKeywordOfficialChange(body(req), actorOf(admin))));
+  app.get("/api/admin/keywords/terms", adminHandler(async (req) => ({ terms: await listBusinessKeywordTerms({ status: q(req).status ?? "pending", kind: q(req).kind, q: q(req).q, feedbackId: Number(q(req).feedbackId) }) })));
+  app.get("/api/admin/keywords/terms/:id", adminHandler(async (req, reply) => orNotFound(req, reply, await getBusinessKeywordTerm(Number(param(req, "id"))))));
+  app.post("/api/admin/keywords/terms/:id/review", adminHandler(async (req, reply, admin) => orNotFound(req, reply, await reviewBusinessKeywordTerm(Number(param(req, "id")), body(req), actorOf(admin)))));
+  app.get("/api/admin/keywords/draft", adminHandler(async () => keywordGovernanceDraft()));
+  app.post("/api/admin/keywords/draft", adminHandler(async (req, _reply, admin) => createBusinessKeywordDraft(body(req), actorOf(admin))));
+  app.post("/api/admin/keywords/draft/replay", adminHandler(async (_req, _reply, admin) => replayBusinessKeywordDraft(actorOf(admin))));
+  app.post("/api/admin/keywords/draft/publish", adminHandler(async (req, _reply, admin) => {
+    const b = body<{ expectedRevision: number; reason: string }>(req);
+    return publishBusinessKeywordDraft({ expectedRevision: Number(b.expectedRevision), reason: String(b.reason ?? "") }, actorOf(admin));
+  }));
+  app.get("/api/admin/keywords/library", adminHandler(async () => keywordGovernanceLibrary()));
+  app.post("/api/admin/keywords/library/rollback", adminHandler(async (req, reply, admin) => {
+    const b = body<{ versionId: string; reason: string }>(req);
+    return orNotFound(req, reply, await rollbackBusinessProfile(String(b.versionId ?? ""), String(b.reason ?? ""), actorOf(admin)));
+  }));
+
   // Attention counts for the navigation.
   app.get("/api/admin/nav-counts", adminHandler(async () => {
     const [c] = await sql<Record<string, number>[]>`
@@ -187,7 +245,8 @@ export function registerAdmin(app: FastifyInstance) {
              (SELECT count(*)::int FROM sources WHERE enabled AND health = 'failing') AS sources,
              (SELECT count(*)::int FROM receipts WHERE status = 'unknown') + (SELECT count(*)::int FROM deliveries WHERE status = 'unknown') AS runs,
              (SELECT count(*)::int FROM monitor_posts WHERE (recognition->>'needsReview')::boolean IS TRUE AND (recognition->>'reviewed')::boolean IS NOT TRUE AND processed_at > now() - interval '7 days')
-               + (SELECT count(*)::int FROM monitor_posts WHERE processed_at IS NULL AND collected_at < now() - interval '20 minutes') AS monitor`;
+               + (SELECT count(*)::int FROM monitor_posts WHERE processed_at IS NULL AND collected_at < now() - interval '20 minutes') AS monitor,
+             (SELECT count(*)::int FROM (SELECT DISTINCT kind, normalized_term FROM business_keyword_terms WHERE status = 'pending') terms) AS keywords`;
     return c;
   }));
 

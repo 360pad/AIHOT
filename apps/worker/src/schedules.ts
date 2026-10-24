@@ -5,7 +5,7 @@ import { credential } from "@aihot/backend/config";
 import { ensureQueue, recordRun } from "@aihot/backend/jobs/queue";
 import { sweepUnprocessed } from "@aihot/backend/jobs/content";
 import { translatePending } from "@aihot/backend/editorial/translate";
-import { adaptIntervals, scheduleDueSources } from "@aihot/backend/sources/collect";
+import { adaptIntervals, scheduleDueSources } from "@aihot/backend/sources/scheduler";
 import { scheduleMpReconcile } from "@aihot/backend/sources/mp";
 import { refreshSourceIcons } from "@aihot/backend/sources/icons";
 import { computeHotRanking, snapshotHeat } from "@aihot/backend/events/hot";
@@ -82,8 +82,8 @@ export const SCHEDULES: Scheduled[] = [
     ? [
         { name: "sources.schedule", cron: "* * * * *", run: () => scheduleDueSources() },
         { name: "sources.adapt-intervals", cron: "20 4 * * *", run: adaptIntervals },
-        // WeChat official accounts (paid), each once per its interval.
-        { name: "sources.mp-reconcile", cron: "*/15 * * * *", run: () => scheduleMpReconcile() },
+        // WeChat checks share the tender collection windows; this minute-level poll only enqueues due sources.
+        { name: "sources.mp-reconcile", cron: "* * * * *", run: () => scheduleMpReconcile() },
       ]
     : []),
   // Codex reset monitor: checked every minute, scanned every 5 (every 3 while hot). It reads X through

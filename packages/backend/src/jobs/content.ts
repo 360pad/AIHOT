@@ -6,8 +6,11 @@
 import type { PgBoss } from "pg-boss";
 import { sql, type Db } from "../db.ts";
 import { extractArticleBody, pageFetchable } from "../content/extract.ts";
-import { analyzeArticle, AnalysisInterruptedError } from "../editorial/analyze.ts";
+import { analyzeArticle, AnalysisInterruptedError, discardArticleWithoutAnalysis } from "../editorial/analyze.ts";
+import { awardResultKeywordGate, loadBusinessProfile } from "../editorial/business.ts";
+import { isAwardResultTitle } from "@aihot/industry/taxonomy";
 import { isHistorical } from "../content/materials.ts";
+import { procurementDeadlinePassed } from "../editorial/deadline.ts";
 import { publishArticle } from "../publication/publish.ts";
 import { BudgetExceededError, ProviderRejectedError, ReceiptBusyError, ReceiptUnknownError } from "../providers/receipts.ts";
 import { ModelOutputError } from "../providers/llm.ts";
@@ -118,8 +121,10 @@ export async function settleCollectedArticle(articleId: string): Promise<boolean
 
 /** attemptTag makes an explicit re-evaluation a new (paid) request; the same tag reuses its receipt. */
 export async function processArticle(articleId: string, opts: { attemptTag?: string } = {}): Promise<{ state: string }> {
-  const [found] = await sql<{ participation_mode: string; processing_state: string; revision: number; backfill: boolean; published_at: Date | null; discovered_at: Date }[]>`
-    SELECT s.participation_mode, a.processing_state, a.revision, a.backfill, a.published_at, a.discovered_at FROM articles a JOIN sources s ON s.id = a.source_id WHERE a.id = ${articleId}`;
+  const [found] = await sql<{ participation_mode: string; processing_state: string; revision: number; backfill: boolean; published_at: Date | null; discovered_at: Date; title: string; excerpt: string | null; body_text: string | null }[]>`
+    SELECT s.participation_mode, a.processing_state, a.revision, a.backfill, a.published_at, a.discovered_at,
+           a.title, a.excerpt, a.body_text
+    FROM articles a JOIN sources s ON s.id = a.source_id WHERE a.id = ${articleId}`;
   if (!found) return { state: "missing" };
   const row = { ...found, historical: isHistorical(found) };
   if (row.participation_mode !== "editorial") {
@@ -127,6 +132,21 @@ export async function processArticle(articleId: string, opts: { attemptTag?: str
     const { group } = await settleNonEditorial(articleId);
     if (group) await enqueue(QUEUES.group, { articleId, signalOnly: true }, { singletonKey: articleId, priority: PRIORITY.liveSignal });
     return { state: "skipped" };
+  }
+  if (procurementDeadlinePassed({ title: found.title, excerpt: found.excerpt, bodyText: found.body_text })) {
+    await discardArticleWithoutAnalysis(articleId);
+    return { state: "expired" };
+  }
+  if (isAwardResultTitle(found.title)) {
+    const gate = awardResultKeywordGate({ title: found.title, excerpt: found.excerpt, bodyText: found.body_text }, await loadBusinessProfile());
+    if (!gate.matched) {
+      await discardArticleWithoutAnalysis(articleId);
+      return { state: "discarded" };
+    }
+    await sql`UPDATE articles SET processing_state = 'skipped', processing_attempts = 0, processing_retry_at = NULL,
+                processing_queued_at = NULL, processing_error = NULL WHERE id = ${articleId}`;
+    await publishArticle(articleId);
+    return { state: "keyword-reference" };
   }
   try {
     const result = await analyzeArticle(articleId, { attemptTag: opts.attemptTag });

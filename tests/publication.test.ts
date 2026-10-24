@@ -12,11 +12,12 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 import { closeDb, sql } from "@aihot/backend/db";
-import { setVisibility } from "@aihot/backend/admin/content";
+import { manuallySelectArticle, setVisibility } from "@aihot/backend/admin/content";
 import { updateSource } from "@aihot/backend/admin/sources";
 import { upsertMaterial } from "@aihot/backend/content/materials";
 import { stopBoss } from "@aihot/backend/jobs/queue";
 import { publishArticle, republishSource } from "@aihot/backend/publication/publish";
+import { fetchItemsByIds, toItemSummary } from "@aihot/backend/publication/items";
 import { computeHotRanking } from "@aihot/backend/events/hot";
 import { latestHotRanking } from "@aihot/backend/events/hot-read";
 import { effectiveWatermark } from "@aihot/backend/publication/v1";
@@ -73,6 +74,21 @@ test("expired procurement notices leave the current pool, while awarded results 
   assert.ok(awardedPool.items.some((item) => item.id === awarded), "award information stays available outside the current-bid opportunity cutoff");
 });
 
+test("award-result headlines never appear in the tender stage even if AI classified them as tenders", async () => {
+  const id = await article();
+  const title = `水库安全监测系统中标结果公告 ${T}`;
+  await sql`UPDATE articles SET title = ${title}, language = 'zh' WHERE id = ${id}`;
+  await sql`UPDATE analyses SET title_zh = ${title}, summary_zh = '项目中标结果公告。', selected = false,
+      output = ${sql.json({ itemType: "tender_notice", deadlineStatus: "open" })}
+    WHERE article_id = ${id}`;
+  await publishArticle(id, released());
+
+  const tender = JSON.parse((await get(`/api/site/pool?stage=tender&q=${encodeURIComponent(T)}`)).body) as { items: Array<{ id: string }> };
+  const award = JSON.parse((await get(`/api/site/pool?stage=award&q=${encodeURIComponent(T)}`)).body) as { items: Array<{ id: string }> };
+  assert.equal(tender.items.some((item) => item.id === id), false);
+  assert.equal(award.items.some((item) => item.id === id), true);
+});
+
 async function storyFor(id: string, role: "report" | "mention" = "report"): Promise<string> {
   const publicId = randomUUID();
   const [story] = await sql<{ id: number }[]>`
@@ -88,6 +104,55 @@ async function get(url: string, headers: Record<string, string> = {}) {
   const res = await app.inject({ method: "GET", url, headers });
   return { status: res.statusCode, body: res.body, etag: res.headers.etag as string | undefined };
 }
+
+test("manual selection publishes an AI-rejected item while preserving its original score and labeling it", async () => {
+  const id = await article();
+  await sql`UPDATE analyses SET selected = false, score = 42, output = ${sql.json({ itemType: "tender_notice", deadlineStatus: "open" })} WHERE article_id = ${id}`;
+  const result = await manuallySelectArticle(id, 0, "test");
+  assert.equal(result?.selected, true);
+  const [analysis] = await sql<{ selected: boolean; score: number }[]>`SELECT selected, score FROM analyses WHERE article_id = ${id}`;
+  assert.equal(analysis?.selected, false, "manual curation must not rewrite the AI result");
+  assert.equal(Number(analysis?.score), 42);
+  const rows = await fetchItemsByIds([id]);
+  assert.equal(toItemSummary(rows.get(id)!).manualSelected, true, "the public detail projection identifies a human selection");
+  const [publication] = await sql<{ selected: boolean; score: number; reason: string }[]>`SELECT selected, score, reason FROM publications WHERE article_id = ${id}`;
+  assert.equal(publication?.selected, true);
+  assert.equal(Number(publication?.score), 42, "the displayed score remains the AI score");
+  assert.match(publication?.reason ?? "", /人工复核/);
+  await sql`UPDATE selected_ledger SET visible_at = now() WHERE article_id = ${id}`;
+});
+
+test("manual selection refuses expired tender notices without saving a partial override", async () => {
+  const id = await article();
+  await sql`UPDATE analyses SET output = ${sql.json({ itemType: "tender_notice", deadlineStatus: "passed" })} WHERE article_id = ${id}`;
+  await assert.rejects(manuallySelectArticle(id, 0, "test"), /开标时间已过/);
+  const [override] = await sql<{ article_id: string }[]>`SELECT article_id FROM editorial_overrides WHERE article_id = ${id}`;
+  assert.equal(override, undefined);
+});
+
+test("republishing a high-scoring PASS repairs its old automatic selection result", async () => {
+  const id = await article();
+  await sql`UPDATE analyses SET selected = false, score = 78, relevance = 'pass',
+      output = ${sql.json({ itemType: "tender_notice", deadlineStatus: "due_soon", businessMatch: { label: "PASS", selectionPolicy: { featuredThreshold: 75 } } })}
+    WHERE article_id = ${id}`;
+  await publishArticle(id, released());
+  const [publication] = await sql<{ selected: boolean; eligible: boolean; score: number }[]>`
+    SELECT selected, eligible, score FROM publications WHERE article_id = ${id}`;
+  assert.deepEqual(publication, { selected: true, eligible: true, score: 78 });
+  await sql`UPDATE selected_ledger SET visible_at = now() WHERE article_id = ${id}`;
+});
+
+test("republishing an unknown-deadline PASS uses its stored composite threshold", async () => {
+  const id = await article();
+  await sql`UPDATE analyses SET selected = false, score = 81, relevance = 'pass',
+      output = ${sql.json({ itemType: "procurement_intention", deadlineStatus: "unknown", businessMatch: { label: "PASS", selectionPolicy: { featuredThreshold: 75 } } })}
+    WHERE article_id = ${id}`;
+  await publishArticle(id, released());
+  const [publication] = await sql<{ selected: boolean; eligible: boolean; score: number }[]>`
+    SELECT selected, eligible, score FROM publications WHERE article_id = ${id}`;
+  assert.deepEqual(publication, { selected: true, eligible: true, score: 81 });
+  await sql`UPDATE selected_ledger SET visible_at = now() WHERE article_id = ${id}`;
+});
 
 test("site reading sends one language while exports retain both, including after withdrawal", async () => {
   const id = await article();

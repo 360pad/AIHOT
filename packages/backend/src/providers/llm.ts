@@ -5,6 +5,7 @@ import type { z } from "zod";
 import { config, credential } from "../config.ts";
 import { sha256 } from "../lib/ids.ts";
 import { completeReceipt, paidRequest, ProviderRejectedError, rejectReceivedResponse } from "./receipts.ts";
+import { gatewayActualCost } from "./actual-cost.ts";
 import { sql } from "../db.ts";
 
 export interface ModelSpec {
@@ -216,7 +217,7 @@ export async function chatJson<S extends z.ZodType>(opts: ChatJsonOptions<S>): P
         response: { ...json, _latencyMs: Date.now() - started },
         requestId: (json.id as string | undefined) ?? res.headers.get("x-request-id"),
         usage,
-        cost: null,
+        cost: gatewayActualCost(json),
       };
     },
   );

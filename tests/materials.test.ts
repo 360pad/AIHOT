@@ -12,9 +12,12 @@ import { identityKeyForUrl } from "@aihot/backend/lib/url";
 
 const SOURCE = `test-materials-${tag()}`;
 const OTHER = `test-materials-other-${tag()}`;
+const SIGNAL = `test-materials-signal-${tag()}`;
 before(async () => {
   await sql`INSERT INTO sources (id, name, kind, next_fetch_at) VALUES (${SOURCE}, 'Test materials', 'rss', '2100-01-01'),
-            (${OTHER}, 'Test aggregator', 'rss', '2100-01-01')`;
+            (${OTHER}, 'Test aggregator', 'rss', '2100-01-01'),
+            (${SIGNAL}, 'Test signal', 'rss', '2100-01-01')`;
+  await sql`UPDATE sources SET participation_mode = 'hot_signal' WHERE id = ${SIGNAL}`;
 });
 after(() => closeDb());
 
@@ -88,6 +91,51 @@ test("another source listing the same article records a discovery, not a revisio
   assert.deepEqual([a.revision, a.title], [1, "One month without AI"]);
   const found = await sql<{ source_id: string }[]>`SELECT source_id FROM article_discoveries WHERE article_id = ${own.articleId}`;
   assert.ok(found.some((d) => d.source_id === OTHER), "the other source still counts as a discovery");
+});
+
+test("a second fetched URL for the same long article reuses the first article even with a changed headline", async () => {
+  const publishedAt = new Date("2026-10-20T09:00:00+08:00");
+  const bodyText = "官方公告正文包含相同的采购任务、服务范围、资格要求和交付内容。".repeat(30);
+  const first = await upsertMaterial({
+    sourceId: SOURCE, url: `https://example.com/duplicate-first-${tag()}`, title: "档案数字化服务采购公告",
+    publishedAt, bodyText, bodyStatus: "ok", via: "fetch",
+  });
+  const second = await upsertMaterial({
+    sourceId: OTHER, url: `https://mirror.example.com/duplicate-second-${tag()}`, title: "档案资料扫描与数字化采购项目",
+    publishedAt, bodyText, bodyStatus: "ok", via: "fetch",
+  });
+  assert.deepEqual([second.articleId, second.created, second.revised], [first.articleId, false, false]);
+  assert.equal((await sql`SELECT id FROM articles WHERE url LIKE '%duplicate-second-%'`).length, 0);
+  assert.ok((await sql`SELECT source_id FROM article_discoveries WHERE article_id = ${first.articleId} AND source_id = ${OTHER}`).length);
+});
+
+test("the same headline with different procurement details remains a separate article", async () => {
+  const publishedAt = new Date("2026-10-20T09:00:00+08:00");
+  const first = await upsertMaterial({
+    sourceId: SOURCE, url: `https://example.com/distinct-first-${tag()}`, title: "系统建设项目采购公告",
+    publishedAt, bodyText: "第一项采购的具体范围和交付要求。".repeat(50), bodyStatus: "ok", via: "fetch",
+  });
+  const second = await upsertMaterial({
+    sourceId: SOURCE, url: `https://example.com/distinct-second-${tag()}`, title: "系统建设项目采购公告",
+    publishedAt, bodyText: "第二项采购的另一组范围和交付要求。".repeat(50), bodyStatus: "ok", via: "fetch",
+  });
+  assert.notEqual(second.articleId, first.articleId);
+  assert.equal(second.created, true);
+});
+
+test("identical text from a heat-only source does not replace an editorial article", async () => {
+  const publishedAt = new Date("2026-10-20T09:00:00+08:00");
+  const bodyText = "适用于热点聚合的原文内容。".repeat(60);
+  const first = await upsertMaterial({
+    sourceId: SOURCE, url: `https://example.com/editorial-${tag()}`, title: "研究进展报告",
+    publishedAt, bodyText, bodyStatus: "ok", via: "fetch",
+  });
+  const signal = await upsertMaterial({
+    sourceId: SIGNAL, url: `https://example.com/signal-${tag()}`, title: "研究报告热度摘要",
+    publishedAt, bodyText, bodyStatus: "ok", via: "fetch",
+  });
+  assert.notEqual(signal.articleId, first.articleId);
+  assert.equal(signal.created, true);
 });
 
 test("another source reporting an imported article first does not set its baseline", async () => {

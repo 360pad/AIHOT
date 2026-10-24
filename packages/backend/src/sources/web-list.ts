@@ -183,6 +183,80 @@ export function fromHtml(html: string, base: string, source: SourceRow): Candida
   return out;
 }
 
+export function parseAhtbaPageList(text: string, source: SourceRow): Candidate[] {
+  let html = text;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    const findHtml = (value: unknown): string | null => {
+      if (typeof value === "string") return value.includes("/site/trade/affiche/detail/") ? value : null;
+      if (!value || typeof value !== "object") return null;
+      for (const nested of Object.values(value as Record<string, unknown>)) {
+        const found = findHtml(nested);
+        if (found) return found;
+      }
+      return null;
+    };
+    html = findHtml(parsed) ?? "";
+  } catch { /* pageList normally returns an HTML fragment */ }
+  if (!html) return [];
+  const $ = cheerio.load(html);
+  const out: Candidate[] = [];
+  const seen = new Set<string>();
+  $('a[href*="/site/trade/affiche/detail/"]').each((_index, node) => {
+    const link = $(node);
+    const url = absolute(link.attr("href"), "https://www.ahtba.org.cn/");
+    const title = collapseWhitespace(link.text() || link.attr("title") || "");
+    if (!url || !title || seen.has(url) || !allowed(url, source)) return;
+    seen.add(url);
+    const row = link.closest("li, tr, .layui-row, .item, .list-item, .notice-list");
+    const rowText = collapseWhitespace(row.length ? row.text() : link.parent().text());
+    const date = /20\d{2}[-/.年]\d{1,2}[-/.月]\d{1,2}日?(?:\s*\d{1,2}:\d{2}(?::\d{2})?)?/.exec(rowText)?.[0];
+    out.push({ url, title, publishedAt: parseLooseDate(date), raw: { externalId: url.split("/").filter(Boolean).at(-1) } });
+  });
+  return out;
+}
+
+async function fetchAhtbaTrade(source: SourceRow): Promise<Candidate[]> {
+  const options = source.config.tradeList ?? {};
+  const tradeTypes: string[] = Array.isArray(options.tradeTypes) ? options.tradeTypes.map(String) : ["01"];
+  const titleQueries: string[] = Array.isArray(options.titleQueries)
+    ? options.titleQueries.map((value: unknown) => String(value).trim()).filter((query: string) => query.length >= 2).slice(0, 30)
+    : [];
+  const pageSize = Math.max(1, Math.min(60, Number(options.pageSize ?? 15)));
+  const pages = Math.max(1, Math.min(10, Number(options.pages ?? 1)));
+  const pageCandidates: Candidate[] = [];
+  const seen = new Set<string>();
+  const searches = [
+    ...tradeTypes.map((tradeType) => ({ tradeType, afficheTitle: "" })),
+    ...titleQueries.map((afficheTitle) => ({ tradeType: "", afficheTitle })),
+  ];
+  for (const { tradeType, afficheTitle } of searches) {
+    for (let pageNum = 1; pageNum <= pages; pageNum++) {
+      const response = await guardedFetch("https://www.ahtba.org.cn/site/trade/affiche/pageList", {
+        method: "POST",
+        headers: { accept: "text/html,application/json;q=0.9,*/*;q=0.8", "content-type": "application/json" },
+        body: JSON.stringify({ tradeType, tradeClassify: "", afficheType: "", pageNum, pageSize, afficheTitle, publishTimeType: String(options.publishTimeType ?? "month") }),
+        timeoutMs: 25_000,
+        maxBytes: 8 * 1024 * 1024,
+      });
+      if (response.status !== 200) throw new FetchError(`安徽招标网分类列表 HTTP ${response.status}`, response.status);
+      const rows = parseAhtbaPageList(response.text(), source);
+      if (!rows.length) {
+        if (pageNum === 1 && !afficheTitle) throw new FetchError(`安徽招标网分类 ${tradeType} 未返回公告记录`);
+        break;
+      }
+      for (const row of rows) {
+        if (seen.has(row.url)) continue;
+        seen.add(row.url);
+        pageCandidates.push(row);
+      }
+      if (rows.length < pageSize) break;
+    }
+  }
+  if (!pageCandidates.length) throw new FetchError("安徽招标网分类列表未返回公告记录");
+  return pageCandidates;
+}
+
 /** A changelog heading that is only a date, bare or after a short label: "时间: 2026-09-10", "时间：2024-05-17". */
 const DATE_HEADING = /^(?:[^\d:：]{1,12}[:：])?\s*(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})日?$/;
 
@@ -302,6 +376,7 @@ async function fromMimoHome(html: string, base: string, source: SourceRow): Prom
 }
 
 export async function fetchWebList(source: SourceRow): Promise<Candidate[]> {
+  if (source.config.adapter === "ahtba_trade") return fetchAhtbaTrade(source);
   const { text, viaJina, base } = await fetchListingText(source);
   const mode = source.config.adapter === "mimo_home" ? "mimo_home" : source.config.parseMode ?? (viaJina ? "markdown" : "html");
   let out: Candidate[];
@@ -335,12 +410,30 @@ export async function fetchDetail(url: string, source: SourceRow, need: DetailNe
   const jina = dateInJina || titleInJina ? (await jinaRead(url, { purpose: "source_detail", subject: `source:${source.id}` })).raw : null;
   let html: string | null = null;
   let body: ExtractedBody | null = null;
-  if ((need.date && !dateInJina) || (need.title && !titleInJina) || need.summary) {
+  if ((need.date && !dateInJina) || (need.title && !titleInJina) || need.summary || need.body) {
     const res = await guardedFetch(url, { timeoutMs: 20_000 });
     if (res.status === 200) {
       html = res.text();
       if (need.body && /html/.test(res.headers.get("content-type") ?? "")) {
-        try { body = readable(html, res.url); }
+        try {
+          const selector = d.bodyUrlSelector;
+          const attribute = String(d.bodyUrlAttribute ?? "href");
+          const bodyPath = selector ? cheerio.load(html)(selector).first().attr(attribute) : null;
+          const bodyUrl = bodyPath ? absolute(bodyPath, res.url) : null;
+          const bodyResponse = bodyUrl ? await guardedFetch(bodyUrl, { timeoutMs: 20_000, maxBytes: 8 * 1024 * 1024 }) : null;
+          const bodyHtml = bodyResponse?.status === 200 ? bodyResponse.text() : html;
+          const bodyBase = bodyResponse?.url ?? res.url;
+          if (d.bodyContentSelector && bodyResponse?.status === 200) {
+            const bodyDocument = cheerio.load(bodyHtml);
+            const content = bodyDocument(d.bodyContentSelector).first();
+            if (content.length) {
+              const clean = sanitizeBody(content.html() ?? "", bodyBase);
+              const text = stripTags(clean);
+              if (text.length >= 200) body = { html: clean, text, images: [], via: "selector" };
+            }
+          }
+          if (!body) body = readable(bodyHtml, bodyBase);
+        }
         catch { /* A failed extraction must not discard the detail metadata. */ }
       }
     }
