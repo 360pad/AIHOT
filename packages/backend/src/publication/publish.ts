@@ -175,8 +175,9 @@ export async function publishArticleTx(tx: Tx, articleId: string, options: Publi
 
   const f = override?.fields ?? {};
   const isChineseTitle = article.language === "zh" || /[一-鿿]/.test(article.title);
-  const awardResult = isAwardResultTitle(article.title);
-  const awardGate = awardResult
+  const titleAwardResult = isAwardResultTitle(article.title);
+  const awardResult = titleAwardResult || analysis?.output?.itemType === "award_result";
+  const awardGate = titleAwardResult
     ? awardResultKeywordGate({ title: article.title, excerpt: article.excerpt, bodyText: article.body_text }, await loadBusinessProfile())
     : null;
   const awardReference = awardGate?.matched === true;
@@ -213,7 +214,7 @@ export async function publishArticleTx(tx: Tx, articleId: string, options: Publi
 
   const itemType = awardResult ? "award_result" : typeof analysis?.output?.itemType === "string" ? analysis.output.itemType : null;
   const deadlineStatus = typeof analysis?.output?.deadlineStatus === "string" ? analysis.output.deadlineStatus : null;
-  const eligible = !stale && isCurrentOpportunity({ itemType, deadlineStatus }) && (awardResult
+  const eligible = !stale && isCurrentOpportunity({ itemType, deadlineStatus }) && (titleAwardResult
     ? awardReference && source.participation_mode === "editorial" && !!title && !!summary
     : isPoolEligible({ participationMode: source.participation_mode, relevance, title, summary }));
   let regionalSelected = false;
@@ -337,6 +338,7 @@ export async function publishArticleTx(tx: Tx, articleId: string, options: Publi
         EXCLUDED.selected_ready_at, EXCLUDED.visible_after, EXCLUDED.body_mode, EXCLUDED.syndicate,
         EXCLUDED.indexable, EXCLUDED.story_id, EXCLUDED.fact_id, EXCLUDED.search_text,
         EXCLUDED.sort_at)`;
+  await tx`UPDATE collection_batch_articles SET published_selected = ${selected} WHERE article_id = ${articleId}`;
 
   // The pool search row follows eligibility; its body part only covers full text the site may show.
   if (eligible) {

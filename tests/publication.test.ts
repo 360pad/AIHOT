@@ -70,8 +70,10 @@ test("expired procurement notices leave the current pool, while awarded results 
       output = ${sql.json({ itemType: "award_result", deadlineStatus: "passed" })}
     WHERE article_id = ${awarded}`;
   await publishArticle(awarded, released());
-  const awardedPool = JSON.parse((await get(`/api/site/pool?q=AWARD-LEARNING-${T}`)).body) as { items: Array<{ id: string }> };
-  assert.ok(awardedPool.items.some((item) => item.id === awarded), "award information stays available outside the current-bid opportunity cutoff");
+  const awardedPool = JSON.parse((await get(`/api/site/pool?q=AWARD-LEARNING-${T}`)).body) as { items: Array<{ id: string; selected: boolean }> };
+  const awardedItem = awardedPool.items.find((item) => item.id === awarded);
+  assert.ok(awardedItem, "award information stays available outside the current-bid opportunity cutoff");
+  assert.equal(awardedItem.selected, false, "an award result is not featured even when the model selected it");
 });
 
 test("award-result headlines never appear in the tender stage even if AI classified them as tenders", async () => {

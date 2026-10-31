@@ -7,6 +7,7 @@ import type { PgBoss } from "pg-boss";
 import { sql, type Db } from "../db.ts";
 import { extractArticleBody, pageFetchable } from "../content/extract.ts";
 import { analyzeArticle, AnalysisInterruptedError, discardArticleWithoutAnalysis } from "../editorial/analyze.ts";
+import { recordCollectionBatchFailure, recordCollectionBatchOutcome } from "../content/collection-batch.ts";
 import { awardResultKeywordGate, loadBusinessProfile } from "../editorial/business.ts";
 import { isAwardResultTitle } from "@aihot/industry/taxonomy";
 import { isHistorical } from "../content/materials.ts";
@@ -134,17 +135,18 @@ export async function processArticle(articleId: string, opts: { attemptTag?: str
     return { state: "skipped" };
   }
   if (procurementDeadlinePassed({ title: found.title, excerpt: found.excerpt, bodyText: found.body_text })) {
-    await discardArticleWithoutAnalysis(articleId);
+    await discardArticleWithoutAnalysis(articleId, { status: "expired", reason: "采购截止时间已过" });
     return { state: "expired" };
   }
   if (isAwardResultTitle(found.title)) {
     const gate = awardResultKeywordGate({ title: found.title, excerpt: found.excerpt, bodyText: found.body_text }, await loadBusinessProfile());
     if (!gate.matched) {
-      await discardArticleWithoutAnalysis(articleId);
+      await discardArticleWithoutAnalysis(articleId, { status: "award_result_discarded", reason: "中标或合同结果未命中保留关键词" });
       return { state: "discarded" };
     }
     await sql`UPDATE articles SET processing_state = 'skipped', processing_attempts = 0, processing_retry_at = NULL,
                 processing_queued_at = NULL, processing_error = NULL WHERE id = ${articleId}`;
+    await recordCollectionBatchOutcome(articleId, { status: "reference", reason: "中标或合同结果命中保留关键词", selected: false });
     await publishArticle(articleId);
     return { state: "keyword-reference" };
   }
@@ -167,6 +169,7 @@ export async function processArticle(articleId: string, opts: { attemptTag?: str
     if (error instanceof ReceiptUnknownError) {
       // The provider may have billed this request: stop; ops.recover releases it once and requeues the article.
       await sql`UPDATE articles SET processing_state = 'failed', processing_error = ${`receipt ${error.receiptId} outcome unknown`} WHERE id = ${articleId}`;
+      await recordCollectionBatchFailure(articleId, `receipt ${error.receiptId} outcome unknown`);
       return { state: "unknown-receipt" };
     }
     throw error;
@@ -192,6 +195,7 @@ async function afterFailure(articleId: string, error: unknown): Promise<{ state:
   if (delayMinutes === null) {
     await sql`UPDATE articles SET processing_state = 'failed', processing_error = ${message}, processing_attempts = ${attempts},
                 processing_retry_at = NULL, processing_queued_at = NULL WHERE id = ${articleId}`;
+    await recordCollectionBatchFailure(articleId, message);
     return { state: "failed" };
   }
   const retryAt = new Date(Date.now() + delayMinutes * 60_000);

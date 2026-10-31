@@ -101,3 +101,37 @@ No actionable P0/P1/P2 visual or business-flow findings remain. The fixture coun
 - `node --experimental-strip-types --test tests/source-processing-mode.test.ts apps/web/tests/industry.test.ts`: 6 passed. Docker Node 24 production build and service restart completed; local host `npm run typecheck` reached the web typecheck but was blocked by the host’s Node 22.14.0 runtime, while package-level backend and web `tsc --noEmit` checks passed.
 
 final result: passed
+
+## 业务关键词命中分析页 QA（2026-10-24）
+
+### 设计与实现
+
+- 设计参考：`/Users/360pad/.codex/generated_images/01a16c27-685f-76e3-94ba-df3f35776be7/exec-8c408927-aad0-44df-afd8-4f25759d0876.png`（1505 × 1045 px）。
+- 页面：`/admin/keyword-trends`，默认近 30 天、全部行业；旧频次入口会跳转到新路由并保留筛选条件。
+- 后台新增独立“关键词趋势”菜单，路由为 `/admin/keyword-trends`。
+- 页面提供 7 天 / 30 天 / 全部时间切换、行业分类 tabs、精选与未精选命中 KPI、全部命中正式词条（按频次排序）及轻量动效。统计时间使用文章发布时间，缺失时回退到采集时间；同一篇文章中的同一词条只计一次。
+- 口径：精选占比 = 当前已精选文章中的词条命中次数 ÷ 全部词条命中次数；未精选表示命中文章当前没有入选，不代表人工判定不相关。
+
+### 验证与发布
+
+- 本地隔离 PostgreSQL 测试库执行迁移后，后端完整测试：212 项通过；测试容器和临时测试库已清理，主数据库卷未重建。
+- 在 Node 24 Docker 运行时执行 `node --experimental-strip-types --test apps/web/tests/*.test.ts`：14 项通过。
+- `docker compose build web`：生产构建通过。主机 Node 22.14.0 运行 `npm run typecheck` 时无法加载项目要求的 TypeScript 配置；Docker Node 24 生产构建成功。
+- 已发布到 `http://localhost:3002/admin/keyword-trends`，只重建 Web 容器；API、Worker 和主数据库均保持运行状态，未执行迁移、种子导入或重新采集。
+- `scripts/smoke.ts --base http://localhost:3000` 在运行中的 Web 容器通过：全部 29 个站点、机器接口和 MCP 检查通过。
+- 浏览器实测新菜单与真实数据库数据；近 30 天智慧水利显示 43 次命中（精选 23、未精选 20，占比 53.5%），近 7 天显示 22 次命中（精选 19、未精选 3，占比 86.4%）。
+- 初版紧凑布局在 1265 × 711 浏览器视口完成首屏检查；该排版已按下一节图二样式要求调整，当前版验收见下文。
+
+本次页面最终结果：passed（测试、Docker 发布、接口 smoke 和浏览器首屏验收通过）。
+
+### 图二样式与留白调整（2026-10-24）
+
+- 指标卡改为参考图的图标底色、醒目数值、前一等长周期变化和带渐显动画的真实日趋势折线；折线由命中接口的每日统计绘制，精选占比在无命中的日期留空，不把无数据日误显示为 0%。
+- 页面恢复后台标准页头留白；版本说明、筛选区、表格文字和行距同步放大。指标卡在常见桌面宽度两列显示，超宽屏切换为四列，避免卡片内数字挤压。
+- Node 24 `npm run typecheck` 与 `npm run build -w @aihot/web` 通过；隔离 `aihot_keyword_trends_test` 数据库迁移后，后端测试 212/212 通过；Web 测试 14/14 通过。
+- 新镜像发布到本地 Docker 的 API 与 Web；数据库和 Worker 容器保持原样。Web smoke 29/29 通过。
+- 浏览器实测：30 天全行业合计 389 次命中；7 天智慧水利 22 次（精选 19、未精选 3、精选占比 86.4%）。1265 × 711 视口下两列布局中的百分比数值完整显示，行业和时间筛选联动正常。
+- 后续按界面反馈移除占用高度的正式词库版本信息与重复跳转按钮，将统计时间口径并入页头说明；侧边栏仍提供正式词纠错和业务关键词入口。
+- 命中排行默认列出当前筛选下全部命中词条，不再截断为前 8 条；标题和计数明确说明全量展示与频次排序，查找框仅用于可选缩小列表。
+
+本次图二样式调整结果：passed（类型检查、构建、测试、Docker 发布和浏览器数据验收通过）。

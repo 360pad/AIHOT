@@ -127,7 +127,24 @@ const AWARD_RESULT_TITLE_PATTERN = "((中标|成交|中选)(候选(人|供应商
 export function stageCondition(stage: StageKey | null | undefined) {
   if (!stage) return sql``;
   const awardTitle = sql`concat_ws(' ', p.title, p.original_title) ~ ${AWARD_RESULT_TITLE_PATTERN}`;
-  const stageMatch = sql`(
+  const awardMatch = sql`(
+    EXISTS (
+      SELECT 1 FROM analyses an
+      WHERE an.id = p.analysis_id
+        AND an.output->>'itemType' = 'award_result'
+    )
+    OR p.tags && ARRAY['中标及结果']::text[]
+    OR ${awardTitle}
+  )`;
+  const tenderMatch = sql`(
+    EXISTS (
+      SELECT 1 FROM analyses an
+      WHERE an.id = p.analysis_id
+        AND an.output->>'itemType' = 'tender_notice'
+    )
+    OR p.tags && ARRAY['招标公告']::text[]
+  )`;
+  const preBidMatch = sql`(
     EXISTS (
       SELECT 1 FROM analyses an
       WHERE an.id = p.analysis_id
@@ -135,9 +152,9 @@ export function stageCondition(stage: StageKey | null | undefined) {
     )
     OR p.tags && ${STAGE_TAGS[stage]}::text[]
   )`;
-  return stage === "award"
-    ? sql`AND (${stageMatch} OR ${awardTitle})`
-    : sql`AND NOT ${awardTitle} AND ${stageMatch}`;
+  if (stage === "award") return sql`AND ${awardMatch}`;
+  if (stage === "tender") return sql`AND ${tenderMatch} AND NOT ${awardMatch}`;
+  return sql`AND ${preBidMatch} AND NOT ${awardMatch} AND NOT ${tenderMatch}`;
 }
 
 function mediaView(m: Record<string, any>, mode: "card" | "thumb" | "full" = "thumb", responsive = false): MediaView | null {

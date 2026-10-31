@@ -53,6 +53,8 @@ export default [
     route("admin/selectbench", "routes/admin/selectbench.tsx"),
     route("admin/selectbench/:runId", "routes/admin/selectbench-run.tsx"),
     route("admin/business", "routes/admin/business.tsx"),
+    route("admin/keyword-trends", "routes/admin/keyword-trends.tsx"),
+    route("admin/keyword-governance-flow", "routes/admin/keyword-governance-flow.tsx"),
     route("admin/keyword-corrections", "routes/admin/keyword-corrections.tsx"),
     route("admin/qualifications", "routes/admin/qualifications.tsx"),
     route("admin/keywords", "routes/admin/keywords.tsx"),

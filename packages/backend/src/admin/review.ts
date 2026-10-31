@@ -3,10 +3,12 @@ import { AWARD_RESULT_TITLE_PATTERN } from "@aihot/industry/taxonomy";
 import { loadBusinessProfile, type BusinessProfile } from "../editorial/business.ts";
 import { loadBusinessSelectionPolicy } from "../editorial/business-selection-policy.ts";
 import { sql, type Db } from "../db.ts";
+import { keywordGovernanceBatchOutcomes } from "./keyword-governance-flow.ts";
+import { recordCollectionBatchFeedback } from "../content/collection-batch.ts";
 import { audit } from "./auth.ts";
 import { assessQualificationRequirements, listBusinessQualifications } from "./qualifications.ts";
 
-type ReviewFilter = "all" | "priority" | "high-keyword" | "high-no-keyword" | "low-keyword" | "low-no-keyword" | "keyword" | "keyword-and-negative" | "ai-rejected" | "prefilter-402" | "prefilter-402-keyword" | "unreviewed" | "unknown" | "unanalyzed";
+type ReviewFilter = "calibration-all" | "priority" | "high-keyword" | "high-no-keyword" | "low-keyword" | "low-no-keyword" | "article" | "all" | "keyword" | "keyword-and-negative" | "ai-rejected" | "prefilter-402" | "prefilter-402-keyword" | "unreviewed" | "unknown" | "unanalyzed";
 type KeywordRule = { term: string; capabilityId: string; capabilityName: string; role: string };
 type CollectionBatch = { slot: string; sourceCount: number; foundCount: number; newCount: number; failedCount: number; runningCount: number };
 type CollectionBatchReviewStats = { retainedCount: number; passCount: number; unknownCount: number; unanalyzedCount: number };
@@ -24,8 +26,13 @@ type ReviewDbRow = {
 };
 
 type LowScoreCandidate = { article_id: string; title: string; score: number; relevance: string; output: Record<string, any> | null; total: number };
+const LOW_SCORE_IRRELEVANCE_THRESHOLD = 25;
+const LOW_NO_KEYWORD_DAILY_SAMPLE_LIMIT = 5;
 
-async function lowScoreCandidates(db: Db, days: number, positiveTerms: string[], negativeTerms: string[], limit: number) {
+async function lowScoreCandidates(db: Db, days: number, positiveTerms: string[], negativeTerms: string[], limit: number, batchSlot?: string) {
+  const batchClause = batchSlot
+    ? sql`AND EXISTS (SELECT 1 FROM collection_batch_articles cba WHERE cba.batch_slot = ${batchSlot} AND cba.article_id = a.id)`
+    : sql``;
   return db<LowScoreCandidate[]>`
     WITH base AS (
       SELECT a.id AS article_id, a.title, lower(concat_ws(' ', a.title, a.excerpt, a.body_text)) AS searchable,
@@ -45,14 +52,14 @@ async function lowScoreCandidates(db: Db, days: number, positiveTerms: string[],
         AND coalesce(an.score, nullif(an.output->'scoreBreakdown'->>'total', '')::numeric,
                      nullif(an.output->>'score', '')::numeric, -1) >= 0
         AND coalesce(an.score, nullif(an.output->'scoreBreakdown'->>'total', '')::numeric,
-                     nullif(an.output->>'score', '')::numeric, -1) < 20
+                     nullif(an.output->>'score', '')::numeric, -1) < ${LOW_SCORE_IRRELEVANCE_THRESHOLD}
         AND coalesce(nullif(an.output->'businessScore'->>'total', '')::numeric,
                      nullif(an.output->'businessMatch'->'businessScore'->>'total', '')::numeric,
                      nullif(an.output->'scoreBreakdown'->>'business', '')::numeric, -1) = 0
-        AND (nullif(trim(coalesce(a.body_text, '')), '') IS NOT NULL OR nullif(trim(coalesce(a.excerpt, '')), '') IS NOT NULL)
         AND NOT EXISTS (SELECT 1 FROM business_matching_feedback fb WHERE fb.article_id = a.id)
         AND a.title !~ ${AWARD_RESULT_TITLE_PATTERN.source}
         AND coalesce(an.output->>'itemType', '') <> 'award_result'
+        ${batchClause}
     ), matched AS (
       SELECT base.*,
         coalesce((SELECT count(*) FROM unnest(${positiveTerms}::text[]) t WHERE strpos(base.searchable, t) > 0), 0) AS positive_hits,
@@ -81,11 +88,21 @@ async function lowScoreTerms() {
   };
 }
 
-export async function lowScoreIrrelevancePreview(daysInput = 1) {
+export async function lowScoreIrrelevancePreview(daysInput = 1, batchSlot?: string) {
   const days = lowScoreWindow(daysInput);
   const terms = await lowScoreTerms();
-  const rows = await lowScoreCandidates(sql, days, terms.positive, terms.negative, 8);
-  return { days, threshold: 20, total: Number(rows[0]?.total ?? 0), rows: rows.map(({ total: _total, ...row }) => row) };
+  const [rows, batchRows] = await Promise.all([
+    lowScoreCandidates(sql, days, terms.positive, terms.negative, 8),
+    batchSlot ? lowScoreCandidates(sql, days, terms.positive, terms.negative, 1, batchSlot) : Promise.resolve([]),
+  ]);
+  return {
+    days,
+    threshold: LOW_SCORE_IRRELEVANCE_THRESHOLD,
+    total: Number(rows[0]?.total ?? 0),
+    selectedBatchSlot: batchSlot ?? null,
+    selectedBatchTotal: batchSlot ? Number(batchRows[0]?.total ?? 0) : null,
+    rows: rows.map(({ total: _total, ...row }) => row),
+  };
 }
 
 export async function bulkMarkLowScoreIrrelevant(input: { days?: number; expectedCount?: number }, actor: string) {
@@ -98,22 +115,25 @@ export async function bulkMarkLowScoreIrrelevant(input: { days?: number; expecte
     if (candidates.length !== expectedCount) throw Object.assign(new Error("符合条件的文章数量已变化，请刷新预览后重试"), { statusCode: 409 });
     const marked: string[] = [];
     for (const row of candidates) {
-      const [saved] = await tx<{ article_id: string }[]>`
+      const [saved] = await tx<{ article_id: string; id: number }[]>`
         INSERT INTO business_matching_feedback
           (article_id, label, capability_ids, participation, evidence_quality, note, original_result, created_by, keyword_extracted_at)
         SELECT ${row.article_id}, 'irrelevant', ARRAY[]::text[], 'unknown', 'limited',
-               '低分批量判读：总分低于 20、业务分为 0、无正负关键词命中、AI 未判相关。',
+               ${`低分批量判读：总分低于 ${LOW_SCORE_IRRELEVANCE_THRESHOLD}、业务分为 0、无正负关键词命中、AI 未判相关。`},
                ${tx.json({ title: row.title, relevance: row.relevance, score: row.score, output: row.output } as never)}, ${actor}, now()
         WHERE NOT EXISTS (SELECT 1 FROM business_matching_feedback WHERE article_id = ${row.article_id})
-        RETURNING article_id`;
-      if (saved) marked.push(saved.article_id);
+        RETURNING article_id, id`;
+      if (saved) {
+        marked.push(saved.article_id);
+        await recordCollectionBatchFeedback({ articleId: saved.article_id, feedbackId: saved.id, label: "irrelevant", actor }, tx);
+      }
     }
     return marked;
   });
   await audit(actor, "business.matching.feedback.bulk", "low-score-review", "批量标记低分且无业务词命中的 AI 非相关文章", null, {
-    days, threshold: 20, markedCount: inserted.length, articleIds: inserted.slice(0, 200), articleIdsTruncated: inserted.length > 200,
+    days, threshold: LOW_SCORE_IRRELEVANCE_THRESHOLD, markedCount: inserted.length, articleIds: inserted.slice(0, 200), articleIdsTruncated: inserted.length > 200,
   });
-  return { markedCount: inserted.length, days, threshold: 20 };
+  return { markedCount: inserted.length, days, threshold: LOW_SCORE_IRRELEVANCE_THRESHOLD };
 }
 
 function procurementFacts(text: string, analysisOutput: Record<string, any> | null) {
@@ -182,7 +202,7 @@ async function listCollectionBatches(): Promise<CollectionBatch[]> {
            count(*) FILTER (WHERE fr.status = 'failed')::int AS failed_count,
            count(*) FILTER (WHERE fr.status = 'running')::int AS running_count
     FROM fetch_runs fr JOIN sources s ON s.id = fr.source_id
-    WHERE fr.started_at >= now() - interval '45 days' AND s.kind IN ('rss', 'web_list', 'json_list')
+    WHERE fr.started_at >= now() - interval '45 days' AND s.kind IN ('rss', 'web_list', 'json_list', 'x_search')
     GROUP BY 1 ORDER BY 1 DESC LIMIT 90`;
   return rows.map((row) => ({
     slot: row.local_slot,
@@ -194,22 +214,29 @@ async function listCollectionBatches(): Promise<CollectionBatch[]> {
   }));
 }
 
-export async function listArticleReviews(input: { q?: string; filter?: string; humanStatus?: string; days?: number; page?: number; runSlot?: string }) {
+export async function listArticleReviews(input: { q?: string; filter?: string; humanStatus?: string; days?: number; page?: number; runSlot?: string; articleId?: string }) {
   const [profile, selectionPolicy, collectionBatches, qualificationList] = await Promise.all([loadBusinessProfile(), loadBusinessSelectionPolicy(), listCollectionBatches(), listBusinessQualifications()]);
   const rules = keywordRules(profile);
   const positiveTerms = [...new Set(rules.positive.map((rule) => rule.term.toLocaleLowerCase()))];
   const negativeTerms = [...new Set(rules.negative.map((rule) => rule.term.toLocaleLowerCase()))];
-  const filter: ReviewFilter = ["all", "priority", "high-keyword", "high-no-keyword", "low-keyword", "low-no-keyword", "keyword", "keyword-and-negative", "ai-rejected", "prefilter-402", "prefilter-402-keyword", "unreviewed", "unknown", "unanalyzed"].includes(input.filter ?? "") ? input.filter as ReviewFilter : "unreviewed";
-  const humanStatus = (["all", "marked", "unmarked"].includes(input.humanStatus ?? "") ? input.humanStatus : "unmarked") as "all" | "marked" | "unmarked";
+  const articleId = (input.articleId ?? "").trim().slice(0, 100);
+  const requestedFilter = input.filter ?? "";
+  const legacyFilters = ["all", "keyword", "keyword-and-negative", "ai-rejected", "prefilter-402", "prefilter-402-keyword", "unreviewed", "unknown", "unanalyzed"];
+  const filter: ReviewFilter = articleId ? "article" : legacyFilters.includes(requestedFilter)
+    ? "calibration-all"
+    : ["calibration-all", "priority", "high-keyword", "high-no-keyword", "low-keyword", "low-no-keyword"].includes(requestedFilter)
+      ? requestedFilter as ReviewFilter
+      : "priority";
+  const humanStatus = (articleId ? "all" : ["all", "marked", "unmarked"].includes(input.humanStatus ?? "") ? input.humanStatus : "unmarked") as "all" | "marked" | "unmarked";
   const requestedDays = Number(input.days ?? 30);
   const days = Number.isFinite(requestedDays) ? Math.max(0, Math.min(365, Math.floor(requestedDays))) : 30;
   const page = Math.max(1, Math.floor(Number(input.page) || 1));
-  const pageSize = 25;
+  const pageSize = 1;
   const term = (input.q ?? "").trim().slice(0, 200);
   const runSlot = input.runSlot && collectionBatches.some((batch) => batch.slot === input.runSlot) ? input.runSlot : "";
   const runWindow = collectionBatchWindow(runSlot);
   const awardTitlePattern = AWARD_RESULT_TITLE_PATTERN.source;
-  const awardResultClause = sql`AND a.title !~ ${awardTitlePattern}
+  const awardResultClause = articleId ? sql`` : sql`AND a.title !~ ${awardTitlePattern}
     AND coalesce((SELECT output->>'itemType' FROM analyses WHERE article_id = a.id ORDER BY id DESC LIMIT 1), '') <> 'award_result'`;
   const effectiveAiSelection = sql`coalesce((SELECT CASE
       WHEN output->>'deadlineStatus' = 'passed' THEN false
@@ -235,29 +262,45 @@ export async function listArticleReviews(input: { q?: string; filter?: string; h
         AND (earlier.discovered_at < a.discovered_at OR (earlier.discovered_at = a.discovered_at AND earlier.id < a.id))
     )
   )`;
-  const queryDays = runWindow ? 0 : days;
+  const queryDays = articleId || runWindow ? 0 : days;
   const dateClause = queryDays === 0 ? sql`` : sql`AND a.discovered_at >= now() - (${queryDays} * interval '1 day')`;
-  const batchClause = runWindow ? sql`AND EXISTS (
-    SELECT 1 FROM fetch_runs fr WHERE fr.source_id = a.source_id
-      AND fr.started_at >= ${runWindow.start} AND fr.started_at < ${runWindow.end}
-      AND a.discovered_at >= fr.started_at AND a.discovered_at <= coalesce(fr.finished_at, now())
-  )` : sql``;
-  const humanStatusClause = humanStatus === "marked"
-    ? sql`AND EXISTS (SELECT 1 FROM business_matching_feedback fb WHERE fb.article_id = a.id)`
-    : humanStatus === "unmarked"
-      ? sql`AND NOT EXISTS (SELECT 1 FROM business_matching_feedback fb WHERE fb.article_id = a.id)`
-      : sql``;
   const selectedBatch = collectionBatches.find((batch) => batch.slot === runSlot) ?? null;
-  const selectedBatchReviewStats = runWindow ? (await sql<CollectionBatchReviewStats[]>`
+  const selectedBatchSummary = runWindow ? await keywordGovernanceBatchOutcomes(runSlot, selectedBatch?.newCount ?? 0) : null;
+  const selectedBatchOutcomes = selectedBatchSummary?.outcomes ?? null;
+  const hasTrackedBatch = !selectedBatchOutcomes?.legacy && Number(selectedBatchOutcomes?.insertedCount ?? 0) > 0;
+  const batchClause = articleId ? sql`` : runWindow ? hasTrackedBatch
+    ? sql`AND EXISTS (SELECT 1 FROM collection_batch_articles cba WHERE cba.batch_slot = ${runSlot} AND cba.article_id = a.id)`
+    : sql`AND EXISTS (
+      SELECT 1 FROM fetch_runs fr WHERE fr.source_id = a.source_id
+        AND fr.started_at >= ${runWindow.start} AND fr.started_at < ${runWindow.end}
+        AND a.discovered_at >= fr.started_at AND a.discovered_at <= coalesce(fr.finished_at, now())
+    )` : sql``;
+  const duplicateScopeClause = articleId || hasTrackedBatch ? sql`` : duplicateContentClause;
+  const latestHumanLabel = sql`(SELECT fb.label FROM business_matching_feedback fb WHERE fb.article_id = a.id ORDER BY fb.created_at DESC, fb.id DESC LIMIT 1)`;
+  const humanStatusClause = articleId ? sql`` : humanStatus === "marked"
+    ? sql`AND ${latestHumanLabel} IN ('relevant', 'irrelevant')`
+    : humanStatus === "unmarked"
+      ? sql`AND coalesce(${latestHumanLabel}, '') NOT IN ('relevant', 'irrelevant')`
+      : sql``;
+  const selectedBatchReviewStats = Number(selectedBatchOutcomes?.insertedCount ?? 0) > 0 ? {
+    retainedCount: Number(selectedBatchOutcomes?.retained ?? 0),
+    passCount: Number(selectedBatchOutcomes?.pass ?? 0),
+    unknownCount: Number(selectedBatchOutcomes?.unknown ?? 0),
+    unanalyzedCount: Number(selectedBatchOutcomes?.unanalyzedCount ?? selectedBatchOutcomes?.queued ?? 0),
+    manualReviewRequired: Number(selectedBatchOutcomes?.manualReviewRequired ?? 0),
+    manualMarked: Number(selectedBatchOutcomes?.manualMarked ?? 0),
+    manualPending: Number(selectedBatchOutcomes?.manualPending ?? 0),
+  } : runWindow ? (await sql<CollectionBatchReviewStats[]>`
     SELECT count(*)::int AS "retainedCount",
            count(*) FILTER (WHERE an.relevance = 'pass')::int AS "passCount",
            count(*) FILTER (WHERE an.relevance = 'unknown')::int AS "unknownCount",
            count(*) FILTER (WHERE an.relevance IS NULL)::int AS "unanalyzedCount"
     FROM articles a
     LEFT JOIN LATERAL (SELECT relevance FROM analyses WHERE article_id = a.id ORDER BY id DESC LIMIT 1) an ON true
-    WHERE true ${batchClause} ${awardResultClause} ${duplicateContentClause}`)[0] ?? { retainedCount: 0, passCount: 0, unknownCount: 0, unanalyzedCount: 0 } : null;
+    WHERE true ${batchClause} ${awardResultClause} ${duplicateScopeClause}`)[0] ?? { retainedCount: 0, passCount: 0, unknownCount: 0, unanalyzedCount: 0 } : null;
   let rows: ReviewDbRow[];
   let total: number;
+  let humanLabelCounts = { relevant: 0, irrelevant: 0 };
   let sampleEligibleTotal: number | null = null;
   if (filter === "unreviewed" || filter === "all" || filter === "unanalyzed") {
     const searchClause = term ? sql`AND (a.title ILIKE ${`%${term}%`} OR coalesce(a.excerpt, '') ILIKE ${`%${term}%`} OR coalesce(a.body_text, '') ILIKE ${`%${term}%`})` : sql``;
@@ -276,11 +319,11 @@ export async function listArticleReviews(input: { q?: string; filter?: string; h
         : sql``;
     const [count] = await sql<{ total: number }[]>`
       SELECT count(*)::int AS total FROM articles a WHERE true ${dateClause} ${searchClause} ${reviewClause} ${humanStatusClause} ${batchClause}
-        ${awardResultClause} ${duplicateContentClause}`;
+        ${awardResultClause} ${duplicateScopeClause}`;
     total = Number(count?.total ?? 0);
     const ids = await sql<{ article_id: string }[]>`
       SELECT a.id AS article_id FROM articles a WHERE true ${dateClause} ${searchClause} ${reviewClause} ${humanStatusClause}
-        ${batchClause} ${awardResultClause} ${duplicateContentClause}
+        ${batchClause} ${awardResultClause} ${duplicateScopeClause}
       ORDER BY a.discovered_at DESC, a.id DESC LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`;
     rows = ids.length ? await sql<ReviewDbRow[]>`
       WITH page_ids AS (
@@ -328,7 +371,7 @@ export async function listArticleReviews(input: { q?: string; filter?: string; h
         coalesce((SELECT array_agg(t) FROM unnest(${negativeTerms}::text[]) t WHERE strpos(base.searchable, t) > 0), ARRAY[]::text[]) AS negative_hits
       FROM base ORDER BY base.ordinality` : [];
   } else {
-    const matched = await sql<(ReviewDbRow & { total: number })[]>`
+    const matched = await sql<(ReviewDbRow & { total: number; humanRelevantCount: number; humanIrrelevantCount: number })[]>`
     WITH prefilter_402 AS (
       SELECT DISTINCT split_part(replace(r.subject, 'article:', ''), '@', 1) AS article_id
       FROM receipts r JOIN receipt_attempts attempt ON attempt.receipt_id = r.id
@@ -364,10 +407,11 @@ export async function listArticleReviews(input: { q?: string; filter?: string; h
         FROM analyses WHERE article_id = a.id ORDER BY id DESC LIMIT 1) an ON true
       LEFT JOIN LATERAL (SELECT label, capability_ids, evidence_quality, note, created_at FROM business_matching_feedback WHERE article_id = a.id ORDER BY created_at DESC LIMIT 1) fb ON true
       WHERE (${queryDays} = 0 OR a.discovered_at >= now() - (${queryDays} * interval '1 day'))
+        AND (${articleId} = '' OR a.id = ${articleId})
         ${humanStatusClause}
         ${batchClause}
         ${awardResultClause}
-        ${duplicateContentClause}
+        ${duplicateScopeClause}
         AND (${filter} NOT IN ('prefilter-402', 'prefilter-402-keyword') OR failed.article_id IS NOT NULL)
         AND (${term} = '' OR a.title ILIKE ${`%${term}%`} OR coalesce(a.excerpt, '') ILIKE ${`%${term}%`} OR coalesce(a.body_text, '') ILIKE ${`%${term}%`})
     ), matched AS (
@@ -377,13 +421,17 @@ export async function listArticleReviews(input: { q?: string; filter?: string; h
       FROM base
     ), filtered AS (
       SELECT * FROM matched WHERE
+        (${filter} = 'article' AND ${articleId} <> '')
+        OR
+        (${filter} = 'calibration-all' AND (relevance = 'unknown' OR business_score >= 0))
+        OR
         ${filter} = 'all'
         OR (${filter} = 'keyword' AND cardinality(positive_hits) > 0 AND cardinality(negative_hits) = 0)
         OR (${filter} = 'keyword-and-negative' AND cardinality(positive_hits) > 0 AND cardinality(negative_hits) > 0)
         OR (${filter} = 'high-keyword' AND business_score >= ${selectionPolicy.reviewHighFloor} AND (cardinality(positive_hits) > 0 OR cardinality(negative_hits) > 0))
         OR (${filter} = 'high-no-keyword' AND business_score >= ${selectionPolicy.reviewHighFloor} AND cardinality(positive_hits) = 0 AND cardinality(negative_hits) = 0)
         OR (${filter} = 'low-keyword' AND business_score >= 0 AND business_score < ${selectionPolicy.reviewHighFloor} AND (cardinality(positive_hits) > 0 OR cardinality(negative_hits) > 0))
-        OR (${filter} = 'low-no-keyword' AND business_score >= 0 AND business_score < ${selectionPolicy.reviewHighFloor} AND cardinality(positive_hits) = 0 AND cardinality(negative_hits) = 0)
+        OR (${filter} = 'low-no-keyword' AND relevance <> 'unknown' AND business_score >= 0 AND business_score < ${selectionPolicy.reviewHighFloor} AND cardinality(positive_hits) = 0 AND cardinality(negative_hits) = 0)
         OR (${filter} = 'priority' AND (relevance = 'unknown'
           OR business_score >= ${selectionPolicy.reviewHighFloor}
           OR (business_score >= 0 AND business_score < ${selectionPolicy.reviewHighFloor} AND (cardinality(positive_hits) > 0 OR cardinality(negative_hits) > 0))))
@@ -395,15 +443,22 @@ export async function listArticleReviews(input: { q?: string; filter?: string; h
         OR (${filter} = 'unknown' AND relevance = 'unknown')
         OR (${filter} = 'unanalyzed' AND relevance IS NULL)
     )
-      SELECT filtered.*, count(*) OVER()::int AS total FROM filtered
+      SELECT filtered.*, count(*) OVER()::int AS total,
+             count(*) FILTER (WHERE human_label = 'relevant') OVER() AS "humanRelevantCount",
+             count(*) FILTER (WHERE human_label = 'irrelevant') OVER() AS "humanIrrelevantCount"
+      FROM filtered
       ORDER BY CASE WHEN ${filter} = 'low-no-keyword' THEN md5(article_id || (now() AT TIME ZONE 'Asia/Shanghai')::date::text) END,
                discovered_at DESC, article_id DESC
-      LIMIT ${filter === "low-no-keyword" ? 25 : pageSize} OFFSET ${filter === "low-no-keyword" ? 0 : (page - 1) * pageSize}`;
+      LIMIT ${pageSize} OFFSET ${filter === "low-no-keyword" ? page - 1 : (page - 1) * pageSize}`;
     rows = matched;
     total = Number(matched[0]?.total ?? 0);
+    humanLabelCounts = {
+      relevant: Number(matched[0]?.humanRelevantCount ?? 0),
+      irrelevant: Number(matched[0]?.humanIrrelevantCount ?? 0),
+    };
     if (filter === "low-no-keyword") {
       sampleEligibleTotal = total;
-      total = Math.min(total, 25);
+      total = Math.min(total, LOW_NO_KEYWORD_DAILY_SAMPLE_LIMIT);
     }
   }
   const positiveByTerm = new Map<string, KeywordRule[]>();
@@ -429,7 +484,8 @@ export async function listArticleReviews(input: { q?: string; filter?: string; h
     })),
   }));
   return {
-    page, pageSize, total, filter, humanStatus, days,
+    page, pageSize, total, filter: articleId ? "calibration-all" : filter, articleId: articleId || null, humanStatus, days, humanLabelCounts,
+    sampleLimit: filter === "low-no-keyword" ? LOW_NO_KEYWORD_DAILY_SAMPLE_LIMIT : null,
     sampleEligibleTotal,
     profileVersion: profile.profileVersion,
     runSlot,

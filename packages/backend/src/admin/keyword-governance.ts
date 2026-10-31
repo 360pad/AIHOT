@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
+import { CATEGORIES } from "@aihot/industry/taxonomy";
 import { sql } from "../db.ts";
 import { stableJson, sha256 } from "../lib/ids.ts";
 import { BUSINESS_PROFILE, invalidateBusinessProfileCache } from "../editorial/business.ts";
@@ -275,12 +276,20 @@ export async function getBusinessKeywordSample(feedbackId: number) {
   return { ...row, officialHits: hits, extractedTerms };
 }
 
-export async function businessKeywordHitFrequency(input: { q?: string; kind?: string }) {
+export async function businessKeywordHitFrequency(input: { q?: string; kind?: string; period?: string }) {
   const state = await businessProfile();
   const profile = state.currentProfile?.profile;
   if (!profile) throw new Error("正式业务词库暂不可用");
   const query = (input.q ?? "").trim().slice(0, 100).toLocaleLowerCase();
   const kind = input.kind === "positive" || input.kind === "negative" ? input.kind : null;
+  const period = input.period === "7d" ? "7d" : input.period === "all" ? "all" : "30d";
+  const now = new Date();
+  const periodDays = period === "7d" ? 7 : period === "30d" ? 30 : null;
+  const trendDays = periodDays ?? 30;
+  const currentStart = new Date(now.getTime() - trendDays * 24 * 60 * 60_000);
+  const previousStart = new Date(now.getTime() - trendDays * 2 * 24 * 60 * 60_000);
+  const rangeStart = period === "all" ? null : currentStart;
+  const dateFilter = rangeStart ? sql`coalesce(a.published_at, a.discovered_at) >= ${rangeStart}` : sql`true`;
   const grouped = new Map<string, { kind: Kind; term: string; normalizedTerm: string; phrases: string[]; capabilityNames: string[]; roles: string[] }>();
   for (const item of officialTerms(profile)) {
     const key = `${item.kind}:${item.normalizedTerm}`;
@@ -306,7 +315,8 @@ export async function businessKeywordHitFrequency(input: { q?: string; kind?: st
            count(DISTINCT a.id) FILTER (WHERE p.selected)::int AS "selectedCount"
       FROM articles a
       LEFT JOIN latest_feedback fb ON fb.article_id = a.id
-      LEFT JOIN publications p ON p.article_id = a.id`;
+      LEFT JOIN publications p ON p.article_id = a.id
+     WHERE ${dateFilter}`;
   const termsWithCounts = terms.length ? await sql<any[]>`
     WITH keywords AS (
       SELECT * FROM jsonb_to_recordset(${sql.json(terms as never)})
@@ -318,23 +328,63 @@ export async function businessKeywordHitFrequency(input: { q?: string; kind?: st
        ORDER BY article_id, created_at DESC, id DESC
     ), hits AS (
       SELECT k.kind, k.term, k.normalized_term, k.capability_names, k.roles,
+             CASE WHEN p.category = ANY(${CATEGORIES.map((category) => category.key)}::text[]) THEN p.category ELSE 'unclassified' END AS category,
              a.id AS article_id, fb.label, p.selected
         FROM keywords k
-        LEFT JOIN articles a ON EXISTS (SELECT 1 FROM unnest(k.phrases) phrase
+        LEFT JOIN articles a ON ${dateFilter} AND EXISTS (SELECT 1 FROM unnest(k.phrases) phrase
           WHERE strpos(lower(concat_ws(' ', a.title, a.excerpt, a.body_text)), lower(phrase)) > 0)
         LEFT JOIN latest_feedback fb ON fb.article_id = a.id
         LEFT JOIN publications p ON p.article_id = a.id
     )
-    SELECT kind, term, normalized_term AS "normalizedTerm",
+    SELECT kind, term, normalized_term AS "normalizedTerm", category,
            array_to_string(capability_names, '、') AS "capabilityName", roles,
            count(DISTINCT article_id)::int AS "hitArticleCount",
            count(DISTINCT article_id) FILTER (WHERE label = 'relevant')::int AS "relevantHitCount",
            count(DISTINCT article_id) FILTER (WHERE label = 'irrelevant')::int AS "irrelevantHitCount",
            count(DISTINCT article_id) FILTER (WHERE selected)::int AS "selectedHitCount"
       FROM hits
-     GROUP BY kind, term, normalized_term, capability_names, roles
+     GROUP BY kind, term, normalized_term, category, capability_names, roles
      ORDER BY count(DISTINCT article_id) DESC, term, "capabilityName"` : [];
-  return { summary: summary ?? {}, terms: termsWithCounts, profileVersionId: state.current?.versionId ?? state.currentProfile?.id ?? null };
+  const trendRows = terms.length ? await sql<any[]>`
+    WITH keywords AS (
+      SELECT * FROM jsonb_to_recordset(${sql.json(terms as never)})
+        AS x(kind text, term text, normalized_term text, phrases text[], capability_names text[], roles text[])
+    ), matched AS (
+      SELECT k.kind, k.normalized_term, a.id AS article_id, p.selected,
+             coalesce(a.published_at, a.discovered_at) AS matched_at,
+             (coalesce(a.published_at, a.discovered_at) AT TIME ZONE 'Asia/Shanghai')::date AS match_day,
+             CASE WHEN p.category = ANY(${CATEGORIES.map((category) => category.key)}::text[]) THEN p.category ELSE 'unclassified' END AS category
+        FROM keywords k
+        JOIN articles a ON coalesce(a.published_at, a.discovered_at) >= ${previousStart}
+          AND EXISTS (SELECT 1 FROM unnest(k.phrases) phrase
+            WHERE strpos(lower(concat_ws(' ', a.title, a.excerpt, a.body_text)), lower(phrase)) > 0)
+        LEFT JOIN publications p ON p.article_id = a.id
+    )
+    SELECT category,
+           (GROUPING(match_day) = 1) AS summary,
+           CASE WHEN GROUPING(match_day) = 1 THEN NULL ELSE to_char(match_day, 'YYYY-MM-DD') END AS date,
+           count(DISTINCT (kind, normalized_term, article_id)) FILTER (WHERE matched_at >= ${currentStart})::int AS "currentHitCount",
+           count(DISTINCT (kind, normalized_term, article_id)) FILTER (WHERE matched_at < ${currentStart})::int AS "previousHitCount",
+           count(DISTINCT (kind, normalized_term, article_id)) FILTER (WHERE matched_at >= ${currentStart} AND selected)::int AS "currentSelectedHitCount",
+           count(DISTINCT (kind, normalized_term, article_id)) FILTER (WHERE matched_at < ${currentStart} AND selected)::int AS "previousSelectedHitCount"
+      FROM matched
+     GROUP BY GROUPING SETS ((category, match_day), (category))
+     ORDER BY category, summary DESC, date` : [];
+  const chinaDay = (date: Date) => {
+    const parts = new Intl.DateTimeFormat("en", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
+    const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "00";
+    return `${part("year")}-${part("month")}-${part("day")}`;
+  };
+  const firstTrendDay = new Date(`${chinaDay(currentStart)}T00:00:00.000Z`);
+  const lastTrendDay = new Date(`${chinaDay(now)}T00:00:00.000Z`);
+  const trendDates: string[] = [];
+  for (let day = firstTrendDay; day <= lastTrendDay; day = new Date(day.getTime() + 24 * 60 * 60_000)) trendDates.push(day.toISOString().slice(0, 10));
+  const categories = [
+    ...CATEGORIES.map(({ key, label }) => ({ key, label })),
+    ...(termsWithCounts.some((item) => item.category === "unclassified" && item.hitArticleCount > 0) ? [{ key: "unclassified", label: "未分类" }] : []),
+  ];
+  return { summary: summary ?? {}, terms: termsWithCounts, categories, period, rangeStart: rangeStart?.toISOString() ?? null, profileVersionId: state.current?.versionId ?? state.currentProfile?.id ?? null,
+    trend: { dates: trendDates, summary: trendRows.filter((row) => row.summary), daily: trendRows.filter((row) => !row.summary) } };
 }
 
 export async function listBusinessKeywordOfficialConflicts() {
@@ -390,6 +440,191 @@ export async function listBusinessKeywordOfficialConflicts() {
      GROUP BY kind, term, normalized_term, capability_id, capability_name, role
     HAVING count(*) FILTER (WHERE conflict AND (resolved_at IS NULL OR reviewed_at > resolved_at)) > 0
      ORDER BY "conflictCount" DESC, "hitArticleCount" DESC, term`;
+}
+
+export async function keywordBatchFlowCounts(input: { slot: string; start: Date; end: Date; legacy: boolean }) {
+  const profile = (await businessProfile()).currentProfile?.profile;
+  const terms = profile ? officialTerms(profile).map(({ kind, term, capabilityId }) => ({ kind, term, capabilityId })) : [];
+  const [row] = await sql<any[]>`
+    WITH batch_articles AS (
+      SELECT article_id FROM collection_batch_articles
+       WHERE batch_slot = ${input.slot} AND ${!input.legacy}
+      UNION
+      SELECT data->>'articleId' AS article_id
+        FROM pgboss.job
+       WHERE ${input.legacy}
+         AND name IN ('content.analyze', 'content.extract-body')
+         AND data ? 'articleId'
+         AND created_on >= ${input.start} AND created_on < ${input.end}
+       GROUP BY data->>'articleId'
+    ), latest_feedback AS (
+      SELECT DISTINCT ON (fb.article_id) fb.id AS feedback_id, fb.article_id, fb.label,
+             fb.note, a.title, a.excerpt, a.body_text
+        FROM business_matching_feedback fb
+        JOIN batch_articles b ON b.article_id = fb.article_id
+        JOIN articles a ON a.id = fb.article_id
+       WHERE fb.label IN ('relevant', 'irrelevant')
+       ORDER BY fb.article_id, fb.created_at DESC, fb.id DESC
+    ), official_terms AS (
+      SELECT * FROM jsonb_to_recordset(${sql.json(terms as never)})
+        AS x(kind text, term text, capability_id text)
+    ), per_sample AS (
+      SELECT l.article_id,
+             coalesce(bool_or(t.term IS NOT NULL), false) AS has_hit,
+             coalesce(bool_or((t.kind = 'positive' AND l.label = 'irrelevant') OR (t.kind = 'negative' AND l.label = 'relevant')), false) AS has_conflict,
+             coalesce(bool_or((t.kind = 'positive' AND l.label = 'relevant') OR (t.kind = 'negative' AND l.label = 'irrelevant')), false) AS has_consistent
+        FROM latest_feedback l
+        LEFT JOIN official_terms t ON strpos(lower(concat_ws(' ', l.title, l.excerpt, l.body_text)), lower(t.term)) > 0
+       GROUP BY l.article_id
+    ), candidates AS (
+      SELECT count(DISTINCT (c.kind, c.capability_id, lower(regexp_replace(trim(c.phrase), '[[:space:][:punct:]]', '', 'g')))) FILTER (WHERE c.kind = 'positive')::int AS positive,
+             count(DISTINCT (c.kind, c.capability_id, lower(regexp_replace(trim(c.phrase), '[[:space:][:punct:]]', '', 'g')))) FILTER (WHERE c.kind = 'negative')::int AS negative,
+             count(DISTINCT c.article_id) FILTER (WHERE c.kind = 'negative' AND l.label = 'irrelevant')::int AS "negativeSamples",
+             count(DISTINCT c.article_id)::int AS samples
+        FROM business_keyword_candidates c
+        JOIN latest_feedback l ON l.feedback_id = c.feedback_id
+    ), candidate_articles AS (
+      SELECT DISTINCT c.article_id
+        FROM business_keyword_candidates c
+        JOIN latest_feedback l ON l.feedback_id = c.feedback_id
+    ), sample_paths AS (
+      SELECT p.article_id, p.has_hit, ca.article_id IS NOT NULL AS has_candidate
+        FROM per_sample p LEFT JOIN candidate_articles ca ON ca.article_id = p.article_id
+    )
+    SELECT (SELECT count(*)::int FROM latest_feedback) AS "traceableSamples",
+           (SELECT count(*) FILTER (WHERE label = 'relevant')::int FROM latest_feedback) AS "labeledRelevant",
+           (SELECT count(*) FILTER (WHERE label = 'irrelevant')::int FROM latest_feedback) AS "labeledIrrelevant",
+           (SELECT count(*) FILTER (WHERE has_hit)::int FROM per_sample) AS "formalHitSamples",
+           (SELECT count(*) FILTER (WHERE label = 'irrelevant' AND note LIKE '低分批量判读：%')::int FROM latest_feedback) AS "lowScoreIrrelevantSamples",
+           (SELECT count(*) FILTER (WHERE has_conflict)::int FROM per_sample) AS "conflictSamples",
+           (SELECT count(*) FILTER (WHERE has_consistent AND NOT has_conflict)::int FROM per_sample) AS "consistentSamples",
+           (SELECT count(*) FILTER (WHERE NOT has_hit)::int FROM per_sample) AS "noFormalHitSamples",
+           (SELECT count(*) FILTER (WHERE has_conflict AND has_consistent)::int FROM per_sample) AS "mixedSamples",
+           candidates.positive AS "positiveCandidateCount",
+           candidates.negative AS "negativeCandidateCount",
+           candidates."negativeSamples" AS "negativeCandidateSamples",
+           candidates.samples AS "candidateSamples",
+           (SELECT count(*) FILTER (WHERE has_hit AND has_candidate)::int FROM sample_paths) AS "formalAndCandidateSamples",
+           (SELECT count(*) FILTER (WHERE has_hit AND NOT has_candidate)::int FROM sample_paths) AS "formalOnlySamples",
+           (SELECT count(*) FILTER (WHERE NOT has_hit AND has_candidate)::int FROM sample_paths) AS "candidateOnlySamples",
+           (SELECT count(*) FILTER (WHERE NOT has_hit AND NOT has_candidate)::int FROM sample_paths) AS "neitherSamples"
+      FROM candidates`;
+  return Object.fromEntries(Object.entries(row ?? {}).map(([key, value]) => [key, Number(value ?? 0)]));
+}
+
+const flowDrillFilters = {
+  samples: sql`true`,
+  relevant: sql`label = 'relevant'`,
+  irrelevant: sql`label = 'irrelevant'`,
+  formalHit: sql`has_hit`,
+  conflict: sql`has_conflict`,
+  consistent: sql`has_consistent AND NOT has_conflict`,
+  noFormalHit: sql`NOT has_hit`,
+  formalAndCandidate: sql`has_hit AND has_candidate`,
+  formalOnly: sql`has_hit AND NOT has_candidate`,
+  candidateOnly: sql`NOT has_hit AND has_candidate`,
+  neither: sql`NOT has_hit AND NOT has_candidate`,
+  candidateSamples: sql`has_candidate`,
+  noCandidateSamples: sql`NOT has_candidate`,
+  negativeCandidateSamples: sql`has_negative_candidate AND label = 'irrelevant'`,
+  irrelevantWithoutCandidate: sql`label = 'irrelevant' AND NOT has_negative_candidate`,
+  lowScoreIrrelevant: sql`label = 'irrelevant' AND note LIKE '低分批量判读：%'`,
+} as const;
+
+export type KeywordFlowDrillMetric = keyof typeof flowDrillFilters;
+
+function drillFact(text: string, labels: string[], pattern: RegExp) {
+  const escaped = labels.map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const labelPattern = new RegExp(`(${escaped})\\s*[：:]?`, "gu");
+  for (const match of text.matchAll(labelPattern)) {
+    const value = text.slice((match.index ?? 0) + match[0].length, (match.index ?? 0) + match[0].length + 180)
+      .split(/[。；;\n]/u, 1)[0]?.match(pattern)?.[0];
+    if (value) return `${match[1]}：${value.replace(/\s+/g, " ").replace(/\.\s+(?=\d)/g, ".").trim()}`;
+  }
+  return null;
+}
+
+export async function keywordBatchFlowDocuments(input: {
+  slot: string;
+  start: Date;
+  end: Date;
+  legacy: boolean;
+  metric: KeywordFlowDrillMetric;
+  page?: number;
+}) {
+  const profile = (await businessProfile()).currentProfile?.profile;
+  const terms = profile ? officialTerms(profile).map(({ kind, term, capabilityId }) => ({ kind, term, capabilityId })) : [];
+  const condition = flowDrillFilters[input.metric];
+  const page = Math.max(1, Math.trunc(input.page ?? 1));
+  const pageSize = 50;
+  const rows = await sql<any[]>`
+    WITH batch_articles AS (
+      SELECT article_id FROM collection_batch_articles
+       WHERE batch_slot = ${input.slot} AND ${!input.legacy}
+      UNION
+      SELECT data->>'articleId' AS article_id
+        FROM pgboss.job
+       WHERE ${input.legacy}
+         AND name IN ('content.analyze', 'content.extract-body')
+         AND data ? 'articleId'
+         AND created_on >= ${input.start} AND created_on < ${input.end}
+       GROUP BY data->>'articleId'
+    ), latest_feedback AS (
+      SELECT DISTINCT ON (fb.article_id) fb.id AS feedback_id, fb.article_id, fb.label,
+             fb.note, a.title, a.excerpt, a.body_text, a.published_at, a.discovered_at
+        FROM business_matching_feedback fb
+        JOIN batch_articles b ON b.article_id = fb.article_id
+        JOIN articles a ON a.id = fb.article_id
+       WHERE fb.label IN ('relevant', 'irrelevant')
+       ORDER BY fb.article_id, fb.created_at DESC, fb.id DESC
+    ), official_terms AS (
+      SELECT * FROM jsonb_to_recordset(${sql.json(terms as never)})
+        AS x(kind text, term text, capability_id text)
+    ), per_sample AS (
+      SELECT l.*,
+             coalesce(bool_or(t.term IS NOT NULL), false) AS has_hit,
+             coalesce(bool_or((t.kind = 'positive' AND l.label = 'irrelevant') OR (t.kind = 'negative' AND l.label = 'relevant')), false) AS has_conflict,
+             coalesce(bool_or((t.kind = 'positive' AND l.label = 'relevant') OR (t.kind = 'negative' AND l.label = 'irrelevant')), false) AS has_consistent
+        FROM latest_feedback l
+        LEFT JOIN official_terms t ON strpos(lower(concat_ws(' ', l.title, l.excerpt, l.body_text)), lower(t.term)) > 0
+       GROUP BY l.feedback_id, l.article_id, l.label, l.note, l.title, l.excerpt, l.body_text, l.published_at, l.discovered_at
+    ), candidate_articles AS (
+      SELECT c.article_id,
+             bool_or(c.kind = 'positive') AS has_positive_candidate,
+             bool_or(c.kind = 'negative') AS has_negative_candidate
+        FROM business_keyword_candidates c
+        JOIN latest_feedback l ON l.feedback_id = c.feedback_id
+       GROUP BY c.article_id
+    ), sample_paths AS (
+      SELECT p.*, ca.article_id IS NOT NULL AS has_candidate,
+             coalesce(ca.has_positive_candidate, false) AS has_positive_candidate,
+             coalesce(ca.has_negative_candidate, false) AS has_negative_candidate
+        FROM per_sample p LEFT JOIN candidate_articles ca ON ca.article_id = p.article_id
+    ), filtered AS (
+      SELECT *, count(*) OVER()::int AS total
+        FROM sample_paths
+       WHERE ${condition}
+       ORDER BY coalesce(published_at, discovered_at) DESC, article_id DESC
+       LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}
+    )
+    SELECT article_id AS "articleId", title, excerpt, body_text AS "bodyText", total
+      FROM filtered`;
+  const total = Number(rows[0]?.total ?? 0);
+  return {
+    metric: input.metric,
+    page,
+    pageSize,
+    total,
+    rows: rows.map((row) => {
+      const text = [row.title, row.excerpt, row.bodyText].filter(Boolean).join("\n");
+      return {
+        articleId: row.articleId,
+        title: row.title,
+        openingTime: drillFact(text, ["投标文件递交截止时间", "递交投标文件截止时间", "响应文件提交截止时间", "响应文件递交截止时间", "提交响应文件截止时间", "投标截止时间", "开标时间", "报名截止时间"], /20\d{2}\s*(?:年\s*\d{1,2}\s*月(?:\s*\d{1,2}\s*(?:日|号)?)?|[-/.]\s*\d{1,2}(?:\s*[-/.]\s*\d{1,2})?)(?:\s*(?:上午|下午)?\s*(?:\d{1,2}\s*(?:时|点)(?:\s*\d{1,2}\s*分)?|\d{1,2}:\d{2}))?/u),
+        amount: drillFact(text, ["采购预算", "项目预算金额", "预算金额", "项目预算", "最高投标限价", "最高限价"], /(?:(?:人民币|RMB|¥|￥)\s*)?\d[\d,]*(?:\.\s*\d+)?\s*(?:亿元|万元|元|%|％)|百分之\s*\d+(?:\.\d+)?/iu),
+      };
+    }),
+  };
 }
 
 export async function listBusinessKeywordOfficialChanges(status = "candidate") {

@@ -18,6 +18,7 @@ import {
   IconMessage,
   IconPlug,
   IconList,
+  IconShare,
   type P,
 } from "../../components/icons";
 import { ThemeSwitch } from "../../components/shell/ThemeSwitch";
@@ -68,7 +69,9 @@ const NAV: Array<{ group: string; items: Array<{ to: string; label: string; coun
   {
     group: "关键词治理",
     items: [
+      { to: "/admin/keyword-governance-flow", label: "关键词治理总览", icon: IconShare },
       { to: "/admin/business", label: "业务关键词", icon: IconGrid },
+      { to: "/admin/keyword-trends", label: "关键词趋势", icon: IconChart },
       { to: "/admin/keyword-corrections", label: "正式词纠错", icon: IconCheck },
       { to: "/admin/keywords", label: "新关键词筛选", count: "keywords", tone: "accent", icon: IconList },
     ],

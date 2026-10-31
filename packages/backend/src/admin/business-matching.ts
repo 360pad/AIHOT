@@ -4,6 +4,7 @@
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { sql } from "../db.ts";
+import { recordCollectionBatchFeedback } from "../content/collection-batch.ts";
 import { sha256, stableJson } from "../lib/ids.ts";
 import { audit } from "./auth.ts";
 import { BUSINESS_PROFILE, businessProfileVersion, invalidateBusinessProfileCache } from "../editorial/business.ts";
@@ -57,7 +58,7 @@ const FeedbackSchema = z.object({
   testId: z.string().max(100).nullable().optional(),
   articleId: z.string().max(100).nullable().optional(),
   caseId: z.string().max(200).nullable().optional(),
-  label: z.enum(["relevant", "irrelevant", "unknown"]),
+  label: z.enum(["relevant", "irrelevant"]),
   capabilityIds: z.array(z.string().regex(/^[a-z][a-z0-9-]{1,63}$/)).max(80).default([]),
   participation: z.enum(["standalone", "embedded", "incidental", "unknown"]).nullable().optional(),
   evidenceQuality: z.enum(["clear", "limited", "insufficient"]).nullable().optional(),
@@ -247,9 +248,8 @@ export async function saveBusinessMatchingFeedback(input: unknown, actor: string
       ) an ON true WHERE a.id = ${parsed.articleId}`;
     if (!article) return null;
     originalResult = { title: article.title, relevance: article.relevance, score: article.score, selected: article.selected, output: article.output };
-    if (parsed.label !== "unknown") {
-      profile = (await businessProfile()).draftProfile?.profile ?? null;
-      if (profile) {
+    profile = (await businessProfile()).draftProfile?.profile ?? null;
+    if (profile) {
         const source = article.body_text || article.excerpt || "";
         const searchText = `${article.title}\n${source}`;
         const lowerText = searchText.toLocaleLowerCase();
@@ -278,7 +278,7 @@ export async function saveBusinessMatchingFeedback(input: unknown, actor: string
           const key = `${kind}:${capabilityId}:${phrase.toLocaleLowerCase()}`;
           proposal.set(key, { kind, phrase, capabilityId, role, evidenceSource, evidence });
         };
-        const projects = article.output?.businessMatch?.projects as Array<{ tasks?: Array<{ name?: string; action?: string; deliverables?: string[]; matches?: Array<{ capabilityId: string }> }> }> | undefined;
+        const projects = article.output?.businessMatch?.projects as Array<{ tasks?: Array<{ name?: string; action?: string; methods?: string[]; deliverables?: string[]; matches?: Array<{ capabilityId: string }> }> }> | undefined;
         if (Array.isArray(projects)) for (const project of projects) for (const task of project?.tasks ?? []) {
           const matchedIds = parsed.label === "relevant"
             ? [...selectedIds]
@@ -287,10 +287,12 @@ export async function saveBusinessMatchingFeedback(input: unknown, actor: string
             if (parsed.label === "relevant") {
               add("positive", task?.name, capabilityId, "serviceAction");
               add("positive", task?.action, capabilityId, "serviceAction");
+              for (const method of task?.methods ?? []) add("positive", method, capabilityId, "method");
               for (const deliverable of task?.deliverables ?? []) add("positive", deliverable, capabilityId, "deliverable");
             } else if (allowNegative) {
               add("negative", task?.name, capabilityId, "negative");
               add("negative", task?.action, capabilityId, "negative");
+              for (const method of task?.methods ?? []) add("negative", method, capabilityId, "negative");
               for (const deliverable of task?.deliverables ?? []) add("negative", deliverable, capabilityId, "negative");
             }
           }
@@ -303,7 +305,6 @@ export async function saveBusinessMatchingFeedback(input: unknown, actor: string
           }
         }
         candidates = [...proposal.values()];
-      }
     }
   }
   const [row] = await sql.begin(async (tx) => {
@@ -311,6 +312,12 @@ export async function saveBusinessMatchingFeedback(input: unknown, actor: string
       INSERT INTO business_matching_feedback (test_id, article_id, case_id, label, capability_ids, participation, evidence_quality, note, original_result, created_by)
       VALUES (${parsed.testId ?? null}, ${parsed.articleId ?? null}, ${parsed.caseId ?? null}, ${parsed.label}, ${parsed.capabilityIds}, ${parsed.participation ?? null}, ${parsed.evidenceQuality ?? null}, ${parsed.note ?? null}, ${tx.json(originalResult as never)}, ${actor})
       RETURNING id, test_id, article_id, case_id, label, capability_ids, participation, evidence_quality, note, created_by, created_at`;
+    if (parsed.articleId) await recordCollectionBatchFeedback({
+      articleId: parsed.articleId,
+      feedbackId: feedback!.id,
+      label: parsed.label,
+      actor,
+    }, tx);
     if (parsed.articleId) for (const candidate of candidates) await tx`INSERT INTO business_keyword_candidates
       (article_id, feedback_id, kind, phrase, capability_id, role, evidence_source, evidence, created_by)
       VALUES (${parsed.articleId}, ${feedback!.id}, ${candidate.kind}, ${candidate.phrase}, ${candidate.capabilityId}, ${candidate.role}, ${candidate.evidenceSource}, ${candidate.evidence}, ${actor})

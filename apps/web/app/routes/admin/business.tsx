@@ -1,12 +1,11 @@
 import { SITE } from "@aihot/industry/site";
 import { useMemo, useState, type ReactNode } from "react";
-import { Link } from "react-router";
+import { Link, redirect } from "react-router";
 import type { Route } from "./+types/business";
 import { adminGet } from "../../lib/admin.server";
 import { useAdminAction } from "../../features/admin/action";
 import { bj } from "../../features/admin/format";
 import { AdminPage, Badge, Button, Card, Empty, Field, Input, ReasonDialog, Select, Textarea } from "../../features/admin/ui";
-import { KeywordFrequency } from "../../features/admin/KeywordFrequency";
 
 type Priority = "重点" | "常规" | "观察";
 type BusinessCategory = "software" | "archives" | "modeling" | "surveying";
@@ -31,15 +30,13 @@ type ProfileVersion = { id: string; content_hash: string; profile: Profile; stat
 type Test = { id: string; profile_version_id: string; title: string; source_url: string | null; status: string; result: unknown; error: string | null; created_at: string; updated_at: string };
 type ProfileRecord = { current: { versionId: string; revision: number } | null; draft: { versionId: string; revision: number } | null; currentProfile: ProfileVersion | null; draftProfile: ProfileVersion | null; history: ProfileVersion[] };
 type ProfileData = ProfileRecord & { view: "profile"; tests: Test[] };
-type FrequencyData = { view: "frequency"; frequency: Record<string, any>; q: string; kind: string };
-
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   if (url.searchParams.get("view") === "frequency") {
-    const q = url.searchParams.get("q")?.trim() ?? "";
-    const kind = url.searchParams.get("kind") ?? "all";
-    const frequency = await adminGet<Record<string, any>>(request, "/api/admin/keywords/frequency?" + new URLSearchParams({ q, kind }));
-    return { view: "frequency", frequency, q, kind } satisfies FrequencyData;
+    const search = new URLSearchParams(url.searchParams);
+    search.delete("view");
+    const query = search.toString();
+    throw redirect(`/admin/keyword-trends${query ? `?${query}` : ""}`);
   }
   const [profile, tests] = await Promise.all([
     adminGet<ProfileRecord>(request, "/api/admin/business/profile"),
@@ -103,9 +100,6 @@ function nextCustomContextId(contexts: Profile["contexts"]) {
 }
 
 export default function BusinessAdmin({ loaderData: d }: Route.ComponentProps) {
-  if (d.view === "frequency") return <AdminPage wide title="业务关键词" subtitle="查看正式关键词在文章、人工标注和精选中的命中情况。">
-    <KeywordFrequency frequency={d.frequency} q={d.q} kind={d.kind} />
-  </AdminPage>;
   return <BusinessProfileAdmin d={d} />;
 }
 
@@ -157,7 +151,7 @@ function BusinessProfileAdmin({ d }: { d: ProfileData }) {
 
   return (
     <AdminPage className="max-w-none" title="业务关键词" subtitle="维护企业业务能力和现行关键词配置。正式词命中统计可用于观察关注度，争议样本进入正式词纠错。">
-      <div className="mb-4 flex justify-end"><Link className="rounded-control border border-accent/20 bg-accent-soft/25 px-3 py-2 text-[10.5px] font-medium text-accent hover:bg-accent-soft/50" to="/admin/business?view=frequency">正式词命中统计 →</Link></div>
+      <div className="mb-4 flex justify-end"><Link className="rounded-control border border-accent/20 bg-accent-soft/25 px-3 py-2 text-[10.5px] font-medium text-accent hover:bg-accent-soft/50" to="/admin/keyword-trends">关键词趋势 →</Link></div>
       <Card title="怎么使用" className="mb-5">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <Step number="1" title="编辑业务" text="先选公司能做的业务类别，再维护业务关键词和明确排除项。行业分类只作为背景。" />
@@ -255,5 +249,5 @@ function ListEditor({ label, hint, values = [], onChange, className = "" }: { la
 
 function TestRow({ test, run, pending }: { test: Test; run: ReturnType<typeof useAdminAction>["run"]; pending: string | null }) {
   const result = test.result === null || test.result === undefined ? null : JSON.stringify(test.result, null, 2);
-  return <div className="px-4 py-3"><div className="flex flex-wrap items-center justify-between gap-2"><div><div className="font-medium text-ink">{test.title}</div><div className="mt-0.5 font-mono text-[11px] text-ink-4">{test.id} · {bj(test.created_at, true)}</div></div><Badge tone={test.status === "succeeded" ? "ok" : test.status === "failed" ? "bad" : "warn"}>{test.status === "queued" ? "排队中" : test.status === "running" ? "分析中" : test.status === "succeeded" ? "已完成" : "失败"}</Badge></div>{test.error ? <div className="mt-2 text-[12.5px] text-hot">{test.error}</div> : null}{result ? <pre className="mt-2 max-h-52 overflow-auto rounded-control bg-bg-sunk p-3 text-[11.5px] leading-relaxed text-ink-2">{result}</pre> : null}<div className="mt-2 flex gap-2"><Button size="sm" disabled={test.status !== "succeeded"} onClick={() => run("POST", "/api/admin/business/feedback", { testId: test.id, label: "relevant", capabilityIds: [], participation: "unknown", evidenceQuality: "limited", note: "人工确认相关" }, { label: `business-feedback-${test.id}`, success: "已标记为相关" })}>标记相关</Button><Button size="sm" disabled={test.status !== "succeeded"} onClick={() => run("POST", "/api/admin/business/feedback", { testId: test.id, label: "irrelevant", capabilityIds: [], participation: "unknown", evidenceQuality: "insufficient", note: "人工确认无关" }, { label: `business-feedback-${test.id}`, success: "已标记为无关" })}>标记无关</Button><Button size="sm" disabled={pending === `business-feedback-${test.id}`} onClick={() => run("POST", "/api/admin/business/feedback", { testId: test.id, label: "unknown", capabilityIds: [], participation: "unknown", evidenceQuality: "insufficient", note: "人工标记待确认" }, { label: `business-feedback-${test.id}`, success: "已标记待确认" })}>待确认</Button></div></div>;
+  return <div className="px-4 py-3"><div className="flex flex-wrap items-center justify-between gap-2"><div><div className="font-medium text-ink">{test.title}</div><div className="mt-0.5 font-mono text-[11px] text-ink-4">{test.id} · {bj(test.created_at, true)}</div></div><Badge tone={test.status === "succeeded" ? "ok" : test.status === "failed" ? "bad" : "warn"}>{test.status === "queued" ? "排队中" : test.status === "running" ? "分析中" : test.status === "succeeded" ? "已完成" : "失败"}</Badge></div>{test.error ? <div className="mt-2 text-[12.5px] text-hot">{test.error}</div> : null}{result ? <pre className="mt-2 max-h-52 overflow-auto rounded-control bg-bg-sunk p-3 text-[11.5px] leading-relaxed text-ink-2">{result}</pre> : null}<div className="mt-2 flex gap-2"><Button size="sm" disabled={test.status !== "succeeded"} onClick={() => run("POST", "/api/admin/business/feedback", { testId: test.id, label: "relevant", capabilityIds: [], participation: "unknown", evidenceQuality: "limited", note: "人工确认相关" }, { label: `business-feedback-${test.id}`, success: "已标记为相关" })}>标记相关</Button><Button size="sm" disabled={test.status !== "succeeded"} onClick={() => run("POST", "/api/admin/business/feedback", { testId: test.id, label: "irrelevant", capabilityIds: [], participation: "unknown", evidenceQuality: "insufficient", note: "人工确认无关" }, { label: `business-feedback-${test.id}`, success: "已标记为无关" })}>标记无关</Button></div></div>;
 }

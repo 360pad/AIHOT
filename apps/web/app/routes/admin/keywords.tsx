@@ -265,7 +265,7 @@ export default function KeywordsAdmin({ loaderData }: Route.ComponentProps) {
     library: "查看和回滚正式关键词版本；运行 JSON 沿用 现行业务配置结构。",
   }[d.step];
   return <AdminPage wide title="新关键词筛选" subtitle={text}>
-    <div className="mb-3 flex justify-end"><Link className="rounded-control border border-accent/20 bg-accent-soft/25 px-3 py-2 text-[10.5px] font-medium text-accent hover:bg-accent-soft/50" to="/admin/business?view=frequency">正式词命中统计 →</Link></div>
+    <div className="mb-3 flex justify-end"><Link className="rounded-control border border-accent/20 bg-accent-soft/25 px-3 py-2 text-[10.5px] font-medium text-accent hover:bg-accent-soft/50" to="/admin/keyword-trends">关键词趋势 →</Link></div>
     <Steps active={d.step} />
       {d.step === "samples" && <StepSamples d={d} run={run} pending={pending} />}
       {d.step === "clusters" && <StepClusters d={d} run={run} pending={pending} />}

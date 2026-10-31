@@ -23,7 +23,7 @@ export interface CollectResult {
   error?: string;
 }
 
-const MAX_ITEMS_PER_RUN = 60;
+const MAX_ITEMS_PER_RUN = 200;
 
 export function noiseFiltered(c: Candidate, source: SourceRow): boolean {
   const f = source.config.ingestNoiseFilter;
@@ -63,24 +63,40 @@ const DAY_MS = 86_400_000;
 /** A listing title that is no headline: a label that swallowed its summary, or a call to action. */
 const needsTitle = (title: string) => title.length > 100 || /^(read more|learn more|continue reading|more|阅读全文|阅读更多|查看详情|了解更多)$/i.test(title.trim());
 
-async function store(sourceId: string, candidates: Candidate[], backfill: string | null): Promise<{ created: number; revised: number }> {
+async function store(sourceId: string, candidates: Candidate[], backfill: string | null, runId: number, skipAnalysis = false): Promise<{ created: number; revised: number; alreadyStored: number; repeatedInRun: number }> {
   let created = 0;
   let revised = 0;
+  let alreadyStored = 0;
+  let repeatedInRun = 0;
   const seen = new Set<string>();
   for (const c of candidates) {
     const material = { ...c, sourceId, via: "fetch" as const, backfill };
     // A listing that names one article twice (a featured card and its list entry, a feed repeating an
     // item) stores its first entry only; the later ones would otherwise revise it on every fetch.
     const key = identityKeyFor(material);
-    if (seen.has(key)) continue;
+    if (seen.has(key)) {
+      repeatedInRun += 1;
+      continue;
+    }
     seen.add(key);
-    const res = await upsertMaterial(material);
+    const res = await sql.begin(async (tx) => {
+      const result = await upsertMaterial(material, tx);
+      if (result.created) await tx`
+        INSERT INTO collection_batch_articles (batch_slot, article_id, source_id)
+        SELECT to_char(date_trunc('hour', started_at AT TIME ZONE 'Asia/Shanghai'), 'YYYY-MM-DD"T"HH24'), ${result.articleId}, ${sourceId}
+        FROM fetch_runs WHERE id = ${runId}
+        ON CONFLICT (batch_slot, article_id) DO NOTHING`;
+      if (result.created && skipAnalysis) await tx`
+        UPDATE collection_batch_articles SET status = 'skipped', reason = '非编辑信源，仅用于事件热度', processed_at = now()
+        WHERE article_id = ${result.articleId} AND status = 'queued'`;
+      if (result.created || result.revised) await queueProcessing(result.articleId, { db: tx });
+      return result;
+    });
     if (res.created) created += 1;
     if (res.revised) revised += 1;
-    // Extraction first when the source wants full text and none came with the listing, else analysis.
-    if (res.created || res.revised) await queueProcessing(res.articleId);
+    if (!res.created && !res.revised) alreadyStored += 1;
   }
-  return { created, revised };
+  return { created, revised, alreadyStored, repeatedInRun };
 }
 
 export async function collectSource(sourceId: string, opts: { force?: boolean } = {}): Promise<CollectResult> {
@@ -127,7 +143,10 @@ export async function collectSource(sourceId: string, opts: { force?: boolean } 
       detail = { pages: x.pages, truncated: x.truncated, backlog: x.backlog.length, backlogPages: x.backlogPages, dropped: x.dropped };
     }
     found = candidates.length;
-    candidates = candidates.filter((c) => allowed(c.url, source)).map((c) => rewriteUrl(c, source)).filter((c) => !noiseFiltered(c, source));
+    candidates = candidates.filter((c) => allowed(c.url, source)).map((c) => rewriteUrl(c, source));
+    const afterUrlPolicy = candidates.length;
+    candidates = candidates.filter((c) => !noiseFiltered(c, source));
+    const afterNoiseFilter = candidates.length;
     if (source.config.sortByPublishedAt) candidates.sort((a, b) => (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0));
 
     const maxAgeDays = Number(source.config._aihot?.maxAgeDays ?? 0);
@@ -137,6 +156,7 @@ export async function collectSource(sourceId: string, opts: { force?: boolean } 
       // do not import an already-expired listing merely because the site still shows it.
       candidates = candidates.filter((c) => !c.publishedAt || c.publishedAt.getTime() >= freshnessCutoff);
     }
+    const afterFreshness = candidates.length;
 
     // First import of a new source: bounded, and archived by source time (never "today", never pushed).
     const backfillLimit = Number(source.config._aihot?.initialBackfillLimit ?? 30);
@@ -148,6 +168,7 @@ export async function collectSource(sourceId: string, opts: { force?: boolean } 
       // X keeps every post it read: its watermark already covers them, so a cut here would lose them.
       candidates = candidates.slice(0, MAX_ITEMS_PER_RUN);
     }
+    const afterRunLimit = candidates.length;
 
     // Detail pages only for material we have not seen (bounded per run), and only for what the listing lacks.
     const d = source.config.detail;
@@ -199,7 +220,24 @@ export async function collectSource(sourceId: string, opts: { force?: boolean } 
       }
     }
 
-    ({ created, revised } = await store(sourceId, candidates, firstImport ? "first-import" : null));
+    const stored = await store(sourceId, candidates, firstImport ? "first-import" : null, run!.id, source.participation_mode !== "editorial");
+    ({ created, revised } = stored);
+    if (!detail?.notModified) {
+      detail = {
+        ...(detail ?? {}),
+        collectionPipeline: {
+          found,
+          rejectedUrlPolicy: found - afterUrlPolicy,
+          rejectedNoise: afterUrlPolicy - afterNoiseFilter,
+          rejectedAge: afterNoiseFilter - afterFreshness,
+          rejectedRunLimit: afterFreshness - afterRunLimit,
+          repeatedInRun: stored.repeatedInRun,
+          alreadyStored: stored.alreadyStored,
+          revised: stored.revised,
+          newArticles: stored.created,
+        },
+      };
+    }
 
     if (freshnessCutoff !== null) {
       // Existing rows age out too. Keep the article for audit/history, but remove it from the
@@ -309,7 +347,9 @@ export async function collectXShard(key: string, sourceIds: string[]): Promise<{
   for (const m of members) {
     const handle = shardHandle(m)!.toLowerCase();
     const mine = read.tweets.filter((t) => t.user.screen_name.toLowerCase() === handle);
-    const stored = await store(m.id, mine.map(tweetToCandidate).map((c) => rewriteUrl(c, m)).filter((c) => !noiseFiltered(c, m)), null);
+    const listed = mine.map(tweetToCandidate).map((c) => rewriteUrl(c, m));
+    const filtered = listed.filter((c) => !noiseFiltered(c, m));
+    const stored = await store(m.id, filtered, null, runs.get(m.id)!, m.participation_mode !== "editorial");
     found += mine.length;
     created += stored.created;
     const own = String(m.cursor!.lastTweetId);
@@ -322,7 +362,10 @@ export async function collectXShard(key: string, sourceIds: string[]): Promise<{
         next_fetch_at = now() + make_interval(mins => ${minutes})
       WHERE id = ${m.id}`;
     await sql`UPDATE fetch_runs SET status = 'ok', finished_at = now(), found_count = ${mine.length}, new_count = ${stored.created},
-                detail = ${sql.json(detail as never)} WHERE id = ${runs.get(m.id)!}`;
+                detail = ${sql.json({ ...detail, collectionPipeline: {
+                  found: mine.length, rejectedUrlPolicy: 0, rejectedNoise: listed.length - filtered.length, rejectedAge: 0, rejectedRunLimit: 0,
+                  repeatedInRun: stored.repeatedInRun, alreadyStored: stored.alreadyStored, revised: stored.revised, newArticles: stored.created,
+                } } as never)} WHERE id = ${runs.get(m.id)!}`;
   }
   return { key, status: "ok", accounts: members.length, found, created };
 }

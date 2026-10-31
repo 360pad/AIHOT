@@ -5,7 +5,7 @@ import { closeDb, sql } from "@aihot/backend/db";
 import { upsertMaterial } from "@aihot/backend/content/materials";
 import { bulkMarkLowScoreIrrelevant, listArticleReviews, lowScoreIrrelevancePreview } from "@aihot/backend/admin/review";
 import { getBusinessSelectionPolicy } from "@aihot/backend/admin/business-selection-policy";
-import { businessProfile, listBusinessKeywordCandidates, saveBusinessMatchingFeedback } from "@aihot/backend/admin/business-matching";
+import { businessMatchingSchemas, businessProfile, listBusinessKeywordCandidates, saveBusinessMatchingFeedback } from "@aihot/backend/admin/business-matching";
 
 const T = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 const SOURCE = `review-filter-${T}`;
@@ -74,15 +74,43 @@ test("the manual-review queue can filter independently by human label status", a
   };
   const unmarkedId = await create("未标记");
   const markedId = await create("已标记");
+  const legacyUnknownId = await create("历史待明确");
   await sql`INSERT INTO business_matching_feedback (article_id, label, created_by)
-    VALUES (${markedId}, 'relevant', 'admin-review-test')`;
+    VALUES (${markedId}, 'relevant', 'admin-review-test'),
+           (${legacyUnknownId}, 'unknown', 'admin-review-test')`;
 
   const unmarked = await listArticleReviews({ q: marker, filter: "unreviewed", days: 0, humanStatus: "unmarked" });
-  assert.deepEqual(unmarked.rows.map((row) => row.article_id), [unmarkedId]);
+  assert.equal(unmarked.total, 2, "legacy human UNKNOWN is treated as awaiting a definite label");
+  const unmarkedSecondPage = await listArticleReviews({ q: marker, filter: "unreviewed", days: 0, humanStatus: "unmarked", page: 2 });
+  assert.deepEqual(new Set([...unmarked.rows, ...unmarkedSecondPage.rows].map((row) => row.article_id)), new Set([unmarkedId, legacyUnknownId]));
   const marked = await listArticleReviews({ q: marker, filter: "unreviewed", days: 0, humanStatus: "marked" });
   assert.deepEqual(marked.rows.map((row) => row.article_id), [markedId]);
   const all = await listArticleReviews({ q: marker, filter: "unreviewed", days: 0, humanStatus: "all" });
-  assert.equal(all.total, 2);
+  assert.equal(all.total, 3);
+});
+
+test("manual feedback accepts only definite relevant or irrelevant labels", () => {
+  assert.throws(() => businessMatchingSchemas.FeedbackSchema.parse({ articleId: "legacy", label: "unknown" }));
+  assert.equal(businessMatchingSchemas.FeedbackSchema.parse({ articleId: "definite", label: "relevant" }).label, "relevant");
+  assert.equal(businessMatchingSchemas.FeedbackSchema.parse({ articleId: "definite", label: "irrelevant" }).label, "irrelevant");
+});
+
+test("a governance article link opens that exact article in the manual-review page", async () => {
+  const articleId = (await upsertMaterial({
+    sourceId: SOURCE, url: `https://example.org/review-direct-${T}`, title: `高分无词命中直达 ${T}`,
+    bodyText: "采购地下空间测绘与三维建模服务。", bodyStatus: "ok", via: "fetch",
+  } as never)).articleId;
+  await sql`UPDATE articles SET discovered_at = now() - interval '400 days' WHERE id = ${articleId}`;
+  await sql`INSERT INTO analyses (article_id, input_revision, origin, relevance, score, selected, output)
+    VALUES (${articleId}, 1, 'model', 'pass', 90, false, ${sql.json({
+      businessScore: { total: 90 },
+      businessMatch: { projects: [{ tasks: [{ name: "地下空间测绘", action: "开展地下空间测绘" }] }] },
+    })})`;
+
+  const result = await listArticleReviews({ articleId });
+  assert.equal(result.total, 1);
+  assert.equal(result.rows[0]?.article_id, articleId);
+  assert.equal(result.rows[0]?.analysis_output?.businessMatch?.projects?.[0]?.tasks?.[0]?.name, "地下空间测绘");
 });
 
 test("the default manual queue includes only UNKNOWN and PASS in the configured review band", async () => {
@@ -293,27 +321,31 @@ test("review cohorts use business score and sample low-score no-keyword records 
 test("human article labels create grounded keyword candidates with the negative score gate", async () => {
   const profile = await businessProfile();
   const capabilityId = profile.draftProfile!.profile.capabilities.find((item) => item.enabled)!.id;
-  const makeArticle = async (name: string, phrase: string, score: number, aiMatched = true) => {
+  const makeArticle = async (name: string, phrase: string, score: number, aiMatched = true, method?: string) => {
     const articleId = (await upsertMaterial({
       sourceId: SOURCE, url: `https://example.org/review-candidate-${name}-${T}`, title: `${phrase} ${name} ${T}`,
-      bodyText: `采购任务为${phrase}，以原文作为候选词证据。`, bodyStatus: "ok", via: "fetch",
+      bodyText: `采购任务为${phrase}${method ? `，方法为${method}` : ""}，以原文作为候选词证据。`, bodyStatus: "ok", via: "fetch",
     } as never)).articleId;
     await sql`INSERT INTO analyses (article_id, input_revision, origin, relevance, score, selected, output)
       VALUES (${articleId}, 1, 'model', 'pass', ${score}, false, ${sql.json({
         businessScore: { total: score },
-        businessMatch: { projects: [{ tasks: [{ name: phrase, action: "采购", matches: aiMatched ? [{ capabilityId }] : [] }] }] },
+        businessMatch: { projects: [{ tasks: [{ name: phrase, action: "采购", ...(method ? { methods: [method] } : {}), matches: aiMatched ? [{ capabilityId }] : [] }] }] },
       })})`;
     return articleId;
   };
   const relevantPhrase = `候选正向词-${T}`;
-  const relevantId = await makeArticle("正向", relevantPhrase, 20, false);
+  const relevantMethod = `候选方法词-${T}`;
+  const relevantId = await makeArticle("正向", relevantPhrase, 20, false, relevantMethod);
   await saveBusinessMatchingFeedback({ articleId: relevantId, label: "relevant", capabilityIds: [capabilityId] }, "test:keyword-candidate");
   const [positive] = await sql<{ phrase: string; kind: string; evidence_source: string; evidence: string }[]>`
-    SELECT phrase, kind, evidence_source, evidence FROM business_keyword_candidates WHERE article_id = ${relevantId}`;
+    SELECT phrase, kind, evidence_source, evidence FROM business_keyword_candidates WHERE article_id = ${relevantId} AND phrase = ${relevantPhrase}`;
   assert.deepEqual([positive?.phrase, positive?.kind, positive?.evidence_source], [relevantPhrase, "positive", "title"]);
   assert.ok(positive?.evidence.includes(relevantPhrase));
   const generic = await sql`SELECT id FROM business_keyword_candidates WHERE article_id = ${relevantId} AND phrase = '采购'`;
   assert.equal(generic.length, 0);
+  const [methodCandidate] = await sql<{ phrase: string; role: string }[]>`
+    SELECT phrase, role FROM business_keyword_candidates WHERE article_id = ${relevantId} AND phrase = ${relevantMethod}`;
+  assert.deepEqual([methodCandidate?.phrase, methodCandidate?.role], [relevantMethod, "method"]);
 
   const highFloor = (await getBusinessSelectionPolicy()).reviewHighFloor;
   const negativePhrase = `候选负向词-${T}`;
@@ -351,7 +383,7 @@ test("low-score bulk review marks only unlabelled zero-business-score articles w
   };
   const eligibleId = await create("符合", { score: 15, business: 0 });
   const keywordId = await create("命中词", { score: 15, business: 0, keyword: true });
-  const thresholdId = await create("边界二十分", { score: 20, business: 0 });
+  const thresholdId = await create("边界二十五分", { score: 25, business: 0 });
   const businessScoreId = await create("业务分非零", { score: 15, business: 1 });
   const aiRelevantId = await create("AI判相关", { score: 15, business: 0, label: "PASS", relevance: "pass" });
   const alreadyMarkedId = await create("已标注", { score: 15, business: 0, marked: true });
@@ -363,7 +395,7 @@ test("low-score bulk review marks only unlabelled zero-business-score articles w
   const [feedback] = await sql<{ label: string; note: string; keyword_extracted_at: Date | null }[]>`
     SELECT label, note, keyword_extracted_at FROM business_matching_feedback WHERE article_id = ${eligibleId} ORDER BY id DESC LIMIT 1`;
   assert.equal(feedback?.label, "irrelevant");
-  assert.match(feedback?.note ?? "", /总分低于 20/);
+  assert.match(feedback?.note ?? "", /总分低于 25/);
   assert.ok(feedback?.keyword_extracted_at, "bulk labels should not create keyword candidates later");
   const [analysis] = await sql<{ relevance: string }[]>`SELECT relevance FROM analyses WHERE article_id = ${eligibleId} ORDER BY id DESC LIMIT 1`;
   assert.equal(analysis?.relevance, "unknown", "bulk human labels keep the original AI result");

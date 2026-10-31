@@ -12,6 +12,7 @@ import { CATEGORY_KEYS } from "@aihot/contracts/taxonomy";
 import { CATEGORIES, isAwardResultTitle } from "@aihot/industry/taxonomy";
 import { SELECTION } from "@aihot/industry/selection";
 import { sql, type Tx } from "../db.ts";
+import { recordCollectionBatchOutcome } from "../content/collection-batch.ts";
 import { chatJson, MODELS, type ContentPart } from "../providers/llm.ts";
 import { completeReceipt, ProviderRejectedError } from "../providers/receipts.ts";
 import { collapseWhitespace } from "../lib/text.ts";
@@ -420,7 +421,8 @@ async function discardArticleReceipts(tx: Tx, articleId: string): Promise<void> 
   for (const row of rows) await tx`UPDATE receipt_attempts SET error = NULL WHERE receipt_id = ${row.id}`;
 }
 
-async function discardArticleTx(tx: Tx, articleId: string): Promise<void> {
+async function discardArticleTx(tx: Tx, articleId: string, outcome?: { status: "block" | "expired" | "award_result_discarded"; reason: string | null; score?: number | null }): Promise<void> {
+  if (outcome) await recordCollectionBatchOutcome(articleId, { ...outcome, selected: false }, tx);
   await discardArticleReceipts(tx, articleId);
   await tx`DELETE FROM business_matching_feedback WHERE article_id = ${articleId}`;
   await tx`DELETE FROM audit_log WHERE subject = ${`business-case:${articleId}`}
@@ -429,10 +431,10 @@ async function discardArticleTx(tx: Tx, articleId: string): Promise<void> {
 }
 
 /** Discards material rejected by a deterministic gate without creating an AI receipt or analysis. */
-export async function discardArticleWithoutAnalysis(articleId: string): Promise<void> {
+export async function discardArticleWithoutAnalysis(articleId: string, outcome?: { status: "expired" | "award_result_discarded"; reason: string }): Promise<void> {
   await sql.begin(async (tx) => {
     const [current] = await tx<{ id: string }[]>`SELECT id FROM articles WHERE id = ${articleId} FOR UPDATE`;
-    if (current) await discardArticleTx(tx, articleId);
+    if (current) await discardArticleTx(tx, articleId, outcome ?? undefined);
   });
 }
 
@@ -759,7 +761,7 @@ export async function analyzeArticle(articleId: string, opts: StepOpts = {}): Pr
     const [current] = await tx<{ revision: number }[]>`SELECT revision FROM articles WHERE id = ${articleId} FOR UPDATE`;
     const stale = !current || current.revision !== input.revision;
     if (out.relevance === "block") {
-      if (!stale) await discardArticleTx(tx, articleId);
+      if (!stale) await discardArticleTx(tx, articleId, { status: "block", reason: out.reasonZh, score: out.score });
       return { analysisId: null, stale };
     }
     const [row] = await tx<{ id: number }[]>`
@@ -770,7 +772,19 @@ export async function analyzeArticle(articleId: string, opts: StepOpts = {}): Pr
         ${out.score}, ${out.selected}, ${tx.json(detail as never)})
       RETURNING id`;
     for (const id of receiptIds) await completeReceipt(tx, id);
-    if (!stale) await tx`UPDATE articles SET processing_state = 'analyzed', processing_error = NULL WHERE id = ${articleId}`;
+    if (!stale) {
+      await tx`UPDATE articles SET processing_state = 'analyzed', processing_error = NULL WHERE id = ${articleId}`;
+      const reviewFloor = Number(out.selectionPolicy?.reviewFloor ?? 50);
+      const manualReviewRequired = out.relevance === "unknown" || (out.relevance === "pass" && !out.selected
+        && (["due_soon", "unknown"].includes(out.deadlineStatus) || (out.score !== null && out.score >= reviewFloor)));
+      await recordCollectionBatchOutcome(articleId, {
+        status: out.relevance === "pass" ? "pass" : "unknown",
+        reason: out.reasonZh,
+        score: out.score,
+        selected: out.selected,
+        manualReviewRequired,
+      }, tx);
+    }
     return { analysisId: row!.id, stale };
   });
   const reused = run.prefilter.reused && (run.scores?.reused ?? true) && (w?.reused ?? true) && (run.structure?.reused ?? true);
