@@ -106,11 +106,20 @@ test("a governance article link opens that exact article in the manual-review pa
       businessScore: { total: 90 },
       businessMatch: { projects: [{ tasks: [{ name: "地下空间测绘", action: "开展地下空间测绘" }] }] },
     })})`;
+  const extractedPhrase = `地下空间测绘候选${T}`;
+  const [feedback] = await sql<{ id: number }[]>`INSERT INTO business_matching_feedback (article_id, label, capability_ids, created_by)
+    VALUES (${articleId}, 'relevant', ARRAY['monitoring-integration'], 'admin-review-test') RETURNING id`;
+  const [term] = await sql<{ id: number }[]>`INSERT INTO business_keyword_terms (kind, term, normalized_term, capability_id, role)
+    VALUES ('positive', ${extractedPhrase}, ${extractedPhrase}, 'monitoring-integration', 'serviceAction') RETURNING id`;
+  await sql`INSERT INTO business_keyword_candidates (article_id, feedback_id, kind, phrase, capability_id, role, evidence_source, evidence, created_by, term_id)
+    VALUES (${articleId}, ${feedback!.id}, 'positive', ${extractedPhrase}, 'monitoring-integration', 'serviceAction', 'title', ${extractedPhrase}, 'admin-review-test', ${term!.id})`;
 
   const result = await listArticleReviews({ articleId });
   assert.equal(result.total, 1);
   assert.equal(result.rows[0]?.article_id, articleId);
   assert.equal(result.rows[0]?.analysis_output?.businessMatch?.projects?.[0]?.tasks?.[0]?.name, "地下空间测绘");
+  assert.deepEqual(result.rows[0]?.ai_keyword_candidates?.map((item) => item.phrase), [extractedPhrase]);
+  assert.equal(result.rows[0]?.ai_keyword_candidates?.[0]?.evidence, extractedPhrase);
 });
 
 test("the default manual queue includes only UNKNOWN and PASS in the configured review band", async () => {

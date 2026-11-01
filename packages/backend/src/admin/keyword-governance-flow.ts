@@ -1,6 +1,6 @@
 import { sql } from "../db.ts";
 import { collectionBatchOutcomeStats } from "../content/collection-batch.ts";
-import { keywordBatchFlowCounts, keywordBatchFlowDocuments, type KeywordFlowDrillMetric } from "./keyword-governance.ts";
+import { keywordBatchFlowCandidateTerms, keywordBatchFlowCounts, keywordBatchFlowDocuments, type KeywordFlowDrillMetric } from "./keyword-governance.ts";
 
 type BatchSlot = {
   slot: string;
@@ -261,10 +261,18 @@ export async function keywordGovernanceFlow(requestedSlot?: string, drillMetric?
   });
   const drillMetrics = new Set([
     "samples", "relevant", "irrelevant", "formalHit", "conflict", "consistent", "noFormalHit",
-    "formalAndCandidate", "formalOnly", "candidateOnly", "neither", "candidateSamples", "noCandidateSamples",
+    "formalAndCandidate", "formalOnly", "candidateOnly", "neither", "candidateSamples", "positiveRelevantCandidateSamples", "noCandidateSamples",
     "negativeCandidateSamples", "irrelevantWithoutCandidate", "lowScoreIrrelevant",
   ]);
-  const drilldown = drillMetric && drillMetrics.has(drillMetric)
+  const drilldown = drillMetric === "positiveCandidateTerms"
+    ? await keywordBatchFlowCandidateTerms({
+      slot: selectedSlot,
+      start: window.start,
+      end: window.end,
+      legacy: Boolean(outcomes.legacy),
+      page: drillPage,
+    })
+    : drillMetric && drillMetrics.has(drillMetric)
     ? await keywordBatchFlowDocuments({
       slot: selectedSlot,
       start: window.start,

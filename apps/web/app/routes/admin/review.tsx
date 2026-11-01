@@ -8,6 +8,7 @@ import { bj } from "../../features/admin/format";
 import { AdminPage, Badge, Button, Card, Empty, Input, Select } from "../../features/admin/ui";
 
 type KeywordHit = { term: string; capabilityId: string; capabilityName: string; role: string };
+type AiKeywordCandidate = { kind: string; phrase: string; evidence_source: string; evidence: string | null };
 type Evidence = { id: string; quote: string; source: string; strength: string; verified?: boolean };
 type BusinessMatch = {
   label?: string;
@@ -47,7 +48,7 @@ type ReviewRow = {
   article_id: string; title: string; url: string; source_name: string; source_tier: string; discovered_at: string; published_at: string | null;
   body_status: string; excerpt: string | null; body_preview: string; title_zh: string | null; summary_zh: string | null; category: string | null;
   procurementFacts: { buyer: string | null; budget: string | null; location: string | null; deadline: string | null; method: string | null };
-  positiveHits: KeywordHit[]; negativeHits: KeywordHit[]; prefilter_402_failed: boolean;
+  positiveHits: KeywordHit[]; negativeHits: KeywordHit[]; ai_keyword_candidates?: AiKeywordCandidate[]; prefilter_402_failed: boolean;
   relevance: string | null; score: number | null; selected: boolean | null; model: string | null; prompt_version: string | null;
   published_selected: boolean; manual_selected: boolean; override_version: number; publication_visibility: string | null;
   reason_zh: string | null; analysis_output: AnalysisOutput | null;
@@ -119,6 +120,18 @@ function AiKeywordExtraction({ row, businessScore, threshold }: { row: ReviewRow
     {expressions.length ? <div className="review-term-tags">{expressions.map(({ kind, phrase }) => <Badge key={`${kind}-${phrase}`} tone="info">{kind} · {phrase}</Badge>)}</div> : <p className="mt-2 text-[12px] text-ink-3">已保存的 AI 任务拆解中没有可展示的任务、动作、方法或交付词组。</p>}
     {evidence.length ? <div className="mt-3 space-y-1 text-[11.5px] leading-5 text-ink-3"><b>AI 原文证据</b>{evidence.map((item, index) => <p key={`${item.id}-${index}`}>“{item.quote}”</p>)}</div> : <p className="mt-2 text-[11px] text-ink-4">这条分析没有保存可展示的原文证据。</p>}
     <p className="mt-2 text-[11px] leading-5 text-ink-4">正式词没有命中。人工判为相关时，原文出现且词表未收录的任务、动作、方法或交付表达可进入正向候选；判为不相关时，高业务分下有原文依据的表达才形成负向线索。</p>
+  </section>;
+}
+
+function AiKeywordCandidates({ candidates }: { candidates: AiKeywordCandidate[] }) {
+  if (!candidates.length) return null;
+  return <section className="review-keyword-hits border-accent/20 bg-accent-soft/15">
+    <div className="flex flex-wrap items-center gap-2"><h3>AI 提取词（词库候选）</h3><Badge tone="info">{candidates.length} 条</Badge></div>
+    <div className="mt-2 space-y-2">{candidates.map((candidate) => <div key={`${candidate.kind}-${candidate.phrase}`}>
+      <Badge tone={candidate.kind === "positive" ? "ok" : "bad"}>{candidate.kind === "positive" ? "正向" : "负向"} · {candidate.phrase}</Badge>
+      {candidate.evidence && <p className="mt-1 text-[11.5px] leading-5 text-ink-3">{candidate.evidence_source === "title" ? "标题" : "正文"}原文依据：“{candidate.evidence}”</p>}
+    </div>)}</div>
+    <p className="mt-2 text-[11px] leading-5 text-ink-4">这些词条来自人工标注样本中的 AI 任务表达，仍是治理候选，尚不代表已加入正式词表。</p>
   </section>;
 }
 
@@ -380,6 +393,7 @@ export default function ReviewAdmin({ loaderData: d }: Route.ComponentProps) {
                         <div className="flex flex-wrap items-center gap-2"><h3>关键词命中</h3><Badge tone="ok">正向 {positiveTerms.length} 个</Badge><Badge tone={negativeTerms.length ? "bad" : "muted"}>负向 {negativeTerms.length} 个</Badge></div>
                         <div className="review-term-tags">{positiveTerms.map((hit) => <Badge key={hit} tone="ok">+ {hit}</Badge>)}{negativeTerms.map((hit) => <Badge key={`negative-${hit}`} tone="bad">− {hit}</Badge>)}{!positiveTerms.length && !negativeTerms.length && <span>未命中现行词表，AI 仍可能通过语义识别</span>}</div>
                       </section>
+                      <AiKeywordCandidates candidates={row.ai_keyword_candidates ?? []} />
                       {highScoreWithoutKeyword && <AiKeywordExtraction row={row} businessScore={businessScore} threshold={d.rules.reviewHighFloor} />}
                       {row.prefilter_402_failed && <p className="review-402-note">相关性预筛曾收到 HTTP 402；当前展示的是已保存的后续判读结果。</p>}
                       <ReviewActions row={row} capabilities={d.rules.capabilities} run={run} pending={pending} />

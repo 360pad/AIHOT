@@ -4,7 +4,7 @@ import { after, test } from "node:test";
 import { closeDb, sql } from "@aihot/backend/db";
 import { upsertMaterial } from "@aihot/backend/content/materials";
 import { BUSINESS_PROFILE } from "@aihot/backend/editorial/business";
-import { keywordGovernanceHelpers, keywordGovernanceOverview, listBusinessKeywordTerms, normalizeKeywordTerm, reviewBusinessKeywordTerm } from "@aihot/backend/admin/keyword-governance";
+import { keywordBatchFlowCandidateTerms, keywordBatchFlowCounts, keywordBatchFlowDocuments, keywordGovernanceHelpers, keywordGovernanceOverview, listBusinessKeywordTerms, normalizeKeywordTerm, reviewBusinessKeywordTerm } from "@aihot/backend/admin/keyword-governance";
 import type { BusinessProfile } from "@aihot/backend/admin/business-matching";
 
 after(async () => { await closeDb(); });
@@ -144,6 +144,52 @@ test("database keyword queues count same normalized terms once and review all ca
     if (feedbackId) await sql`DELETE FROM business_keyword_candidates WHERE feedback_id = ${feedbackId}`;
     if (feedbackId) await sql`DELETE FROM business_matching_feedback WHERE id = ${feedbackId}`;
     if (ids.length) await sql`DELETE FROM business_keyword_terms WHERE id = ANY(${ids})`;
+    if (articleId) await sql`DELETE FROM articles WHERE id = ${articleId}`;
+    await sql`DELETE FROM sources WHERE id = ${sourceId}`;
+  }
+});
+
+test("the relevant positive-candidate drill counts articles separately and returns their extracted phrase evidence", async () => {
+  const sourceId = "keyword-flow-test-" + tag();
+  const slot = "2099-01-01T03";
+  const phrase = `AI提取词回溯${tag()}`;
+  const start = new Date("2099-01-01T03:00:00+08:00");
+  const end = new Date(start.getTime() + 60 * 60_000);
+  let articleId: string | undefined;
+  let feedbackId: number | undefined;
+  let termIds: number[] = [];
+  await sql`INSERT INTO sources (id, name, kind, tier, participation_mode, next_fetch_at)
+    VALUES (${sourceId}, 'Keyword flow test', 'rss', 'T1', 'editorial', '2100-01-01')`;
+  try {
+    articleId = (await upsertMaterial({ sourceId, url: `https://example.invalid/${sourceId}`, title: phrase, bodyText: `项目正文含有${phrase}`, bodyStatus: "ok", via: "fetch" } as never)).articleId;
+    await sql`INSERT INTO collection_batch_articles (batch_slot, article_id, source_id) VALUES (${slot}, ${articleId}, ${sourceId})`;
+    const [feedback] = await sql<{ id: number }[]>`INSERT INTO business_matching_feedback (article_id, label, capability_ids, created_by)
+      VALUES (${articleId}, 'relevant', ARRAY['monitoring-integration', 'software-platform'], 'keyword-flow-test') RETURNING id`;
+    feedbackId = Number(feedback!.id);
+    const inserted = await sql<{ id: number }[]>`INSERT INTO business_keyword_terms (kind, term, normalized_term, capability_id, role)
+      VALUES ('positive', ${phrase}, ${normalizeKeywordTerm(phrase)}, 'monitoring-integration', 'serviceAction'),
+             ('positive', ${phrase}, ${normalizeKeywordTerm(phrase)}, 'software-platform', 'serviceAction') RETURNING id`;
+    termIds = inserted.map((row) => Number(row.id));
+    await sql`INSERT INTO business_keyword_candidates (article_id, feedback_id, kind, phrase, capability_id, role, evidence_source, evidence, created_by, term_id)
+      VALUES (${articleId}, ${feedbackId}, 'positive', ${phrase}, 'monitoring-integration', 'serviceAction', 'title', ${phrase}, 'keyword-flow-test', ${termIds[0]}),
+             (${articleId}, ${feedbackId}, 'positive', ${phrase}, 'software-platform', 'serviceAction', 'title', ${phrase}, 'keyword-flow-test', ${termIds[1]})`;
+
+    const counts = await keywordBatchFlowCounts({ slot, start, end, legacy: false });
+    assert.equal(counts.positiveRelevantCandidateSamples, 1, "one article stays one article even when its phrase is attached to two capabilities");
+    const drilldown = await keywordBatchFlowDocuments({ slot, start, end, legacy: false, metric: "positiveRelevantCandidateSamples" });
+    assert.equal(drilldown.total, 1);
+    assert.deepEqual(drilldown.rows[0]?.candidateTerms.map((item) => item.phrase), [phrase]);
+    assert.equal(drilldown.rows[0]?.candidateTerms[0]?.evidence, phrase);
+    const termDrilldown = await keywordBatchFlowCandidateTerms({ slot, start, end, legacy: false });
+    assert.equal(termDrilldown.total, counts.positiveCandidateCount);
+    assert.equal(termDrilldown.total, 2, "the same phrase in two capabilities follows the displayed term-count unit");
+    assert.deepEqual(termDrilldown.terms.map((item) => item.capabilityId).sort(), ["monitoring-integration", "software-platform"]);
+    assert.ok(termDrilldown.terms.every((item) => item.sourceCount === 1 && item.sources[0]?.articleId === articleId && item.sources[0]?.evidence === phrase));
+  } finally {
+    if (articleId) await sql`DELETE FROM collection_batch_articles WHERE batch_slot = ${slot} AND article_id = ${articleId}`;
+    if (feedbackId) await sql`DELETE FROM business_keyword_candidates WHERE feedback_id = ${feedbackId}`;
+    if (feedbackId) await sql`DELETE FROM business_matching_feedback WHERE id = ${feedbackId}`;
+    if (termIds.length) await sql`DELETE FROM business_keyword_terms WHERE id = ANY(${termIds})`;
     if (articleId) await sql`DELETE FROM articles WHERE id = ${articleId}`;
     await sql`DELETE FROM sources WHERE id = ${sourceId}`;
   }

@@ -480,6 +480,7 @@ export async function keywordBatchFlowCounts(input: { slot: string; start: Date;
       SELECT count(DISTINCT (c.kind, c.capability_id, lower(regexp_replace(trim(c.phrase), '[[:space:][:punct:]]', '', 'g')))) FILTER (WHERE c.kind = 'positive')::int AS positive,
              count(DISTINCT (c.kind, c.capability_id, lower(regexp_replace(trim(c.phrase), '[[:space:][:punct:]]', '', 'g')))) FILTER (WHERE c.kind = 'negative')::int AS negative,
              count(DISTINCT c.article_id) FILTER (WHERE c.kind = 'negative' AND l.label = 'irrelevant')::int AS "negativeSamples",
+             count(DISTINCT c.article_id) FILTER (WHERE c.kind = 'positive' AND l.label = 'relevant')::int AS "positiveRelevantSamples",
              count(DISTINCT c.article_id)::int AS samples
         FROM business_keyword_candidates c
         JOIN latest_feedback l ON l.feedback_id = c.feedback_id
@@ -504,6 +505,7 @@ export async function keywordBatchFlowCounts(input: { slot: string; start: Date;
            candidates.negative AS "negativeCandidateCount",
            candidates."negativeSamples" AS "negativeCandidateSamples",
            candidates.samples AS "candidateSamples",
+           candidates."positiveRelevantSamples" AS "positiveRelevantCandidateSamples",
            (SELECT count(*) FILTER (WHERE has_hit AND has_candidate)::int FROM sample_paths) AS "formalAndCandidateSamples",
            (SELECT count(*) FILTER (WHERE has_hit AND NOT has_candidate)::int FROM sample_paths) AS "formalOnlySamples",
            (SELECT count(*) FILTER (WHERE NOT has_hit AND has_candidate)::int FROM sample_paths) AS "candidateOnlySamples",
@@ -525,6 +527,7 @@ const flowDrillFilters = {
   candidateOnly: sql`NOT has_hit AND has_candidate`,
   neither: sql`NOT has_hit AND NOT has_candidate`,
   candidateSamples: sql`has_candidate`,
+  positiveRelevantCandidateSamples: sql`label = 'relevant' AND has_positive_candidate`,
   noCandidateSamples: sql`NOT has_candidate`,
   negativeCandidateSamples: sql`has_negative_candidate AND label = 'irrelevant'`,
   irrelevantWithoutCandidate: sql`label = 'irrelevant' AND NOT has_negative_candidate`,
@@ -571,10 +574,16 @@ export async function keywordBatchFlowDocuments(input: {
        GROUP BY data->>'articleId'
     ), latest_feedback AS (
       SELECT DISTINCT ON (fb.article_id) fb.id AS feedback_id, fb.article_id, fb.label,
-             fb.note, a.title, a.excerpt, a.body_text, a.published_at, a.discovered_at
+             fb.note, a.title, a.excerpt, a.body_text, a.published_at, a.discovered_at, s.name AS source_name,
+             an.relevance AS ai_relevance, an.score AS ai_score,
+             coalesce(nullif(an.output->'businessScore'->>'total', '')::numeric,
+                      nullif(an.output->'businessMatch'->'businessScore'->>'total', '')::numeric,
+                      nullif(an.output->'scoreBreakdown'->>'business', '')::numeric, -1) AS ai_business_score
         FROM business_matching_feedback fb
         JOIN batch_articles b ON b.article_id = fb.article_id
         JOIN articles a ON a.id = fb.article_id
+        JOIN sources s ON s.id = a.source_id
+        LEFT JOIN LATERAL (SELECT relevance, score, output FROM analyses WHERE article_id = a.id ORDER BY id DESC LIMIT 1) an ON true
        WHERE fb.label IN ('relevant', 'irrelevant')
        ORDER BY fb.article_id, fb.created_at DESC, fb.id DESC
     ), official_terms AS (
@@ -587,7 +596,8 @@ export async function keywordBatchFlowDocuments(input: {
              coalesce(bool_or((t.kind = 'positive' AND l.label = 'relevant') OR (t.kind = 'negative' AND l.label = 'irrelevant')), false) AS has_consistent
         FROM latest_feedback l
         LEFT JOIN official_terms t ON strpos(lower(concat_ws(' ', l.title, l.excerpt, l.body_text)), lower(t.term)) > 0
-       GROUP BY l.feedback_id, l.article_id, l.label, l.note, l.title, l.excerpt, l.body_text, l.published_at, l.discovered_at
+       GROUP BY l.feedback_id, l.article_id, l.label, l.note, l.title, l.excerpt, l.body_text, l.published_at, l.discovered_at,
+                l.source_name, l.ai_relevance, l.ai_score, l.ai_business_score
     ), candidate_articles AS (
       SELECT c.article_id,
              bool_or(c.kind = 'positive') AS has_positive_candidate,
@@ -607,9 +617,26 @@ export async function keywordBatchFlowDocuments(input: {
        ORDER BY coalesce(published_at, discovered_at) DESC, article_id DESC
        LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}
     )
-    SELECT article_id AS "articleId", title, excerpt, body_text AS "bodyText", total
+    SELECT article_id AS "articleId", title, excerpt, body_text AS "bodyText", source_name AS "sourceName",
+           published_at AS "publishedAt", discovered_at AS "discoveredAt", ai_relevance AS "aiRelevance",
+           ai_score AS "aiScore", ai_business_score AS "aiBusinessScore", total
       FROM filtered`;
   const total = Number(rows[0]?.total ?? 0);
+  const candidateRows = input.metric === "positiveRelevantCandidateSamples" && rows.length ? await sql<any[]>`
+    WITH latest_feedback AS (
+      SELECT DISTINCT ON (article_id) id AS feedback_id, article_id
+        FROM business_matching_feedback
+       WHERE article_id = ANY(${rows.map((row) => row.articleId)}::text[]) AND label IN ('relevant', 'irrelevant')
+       ORDER BY article_id, created_at DESC, id DESC
+    )
+    SELECT c.article_id AS "articleId", c.kind, c.phrase, min(c.evidence_source) AS "evidenceSource", min(c.evidence) AS evidence
+      FROM business_keyword_candidates c
+      JOIN latest_feedback l ON l.feedback_id = c.feedback_id
+     WHERE c.kind = 'positive'
+     GROUP BY c.article_id, c.kind, c.phrase
+     ORDER BY c.article_id, c.phrase` : [];
+  const candidateTerms = new Map<string, any[]>();
+  for (const row of candidateRows) candidateTerms.set(row.articleId, [...(candidateTerms.get(row.articleId) ?? []), row]);
   return {
     metric: input.metric,
     page,
@@ -620,10 +647,102 @@ export async function keywordBatchFlowDocuments(input: {
       return {
         articleId: row.articleId,
         title: row.title,
+        sourceName: row.sourceName,
+        publishedAt: row.publishedAt,
+        discoveredAt: row.discoveredAt,
+        aiRelevance: row.aiRelevance,
+        aiScore: row.aiScore === null ? null : Number(row.aiScore),
+        aiBusinessScore: Number(row.aiBusinessScore ?? -1),
+        candidateTerms: candidateTerms.get(row.articleId) ?? [],
         openingTime: drillFact(text, ["投标文件递交截止时间", "递交投标文件截止时间", "响应文件提交截止时间", "响应文件递交截止时间", "提交响应文件截止时间", "投标截止时间", "开标时间", "报名截止时间"], /20\d{2}\s*(?:年\s*\d{1,2}\s*月(?:\s*\d{1,2}\s*(?:日|号)?)?|[-/.]\s*\d{1,2}(?:\s*[-/.]\s*\d{1,2})?)(?:\s*(?:上午|下午)?\s*(?:\d{1,2}\s*(?:时|点)(?:\s*\d{1,2}\s*分)?|\d{1,2}:\d{2}))?/u),
         amount: drillFact(text, ["采购预算", "项目预算金额", "预算金额", "项目预算", "最高投标限价", "最高限价"], /(?:(?:人民币|RMB|¥|￥)\s*)?\d[\d,]*(?:\.\s*\d+)?\s*(?:亿元|万元|元|%|％)|百分之\s*\d+(?:\.\d+)?/iu),
       };
     }),
+  };
+}
+
+export async function keywordBatchFlowCandidateTerms(input: {
+  slot: string;
+  start: Date;
+  end: Date;
+  legacy: boolean;
+  page?: number;
+}) {
+  const profile = (await businessProfile()).currentProfile?.profile;
+  const capabilityNames = new Map(profile?.capabilities.map((capability) => [capability.id, capability.name]) ?? []);
+  const page = Math.max(1, Math.trunc(input.page ?? 1));
+  const pageSize = 50;
+  const rows = await sql<any[]>`
+    WITH batch_articles AS (
+      SELECT article_id FROM collection_batch_articles
+       WHERE batch_slot = ${input.slot} AND ${!input.legacy}
+      UNION
+      SELECT data->>'articleId' AS article_id
+        FROM pgboss.job
+       WHERE ${input.legacy}
+         AND name IN ('content.analyze', 'content.extract-body')
+         AND data ? 'articleId'
+         AND created_on >= ${input.start} AND created_on < ${input.end}
+       GROUP BY data->>'articleId'
+    ), latest_feedback AS (
+      SELECT DISTINCT ON (fb.article_id) fb.id AS feedback_id, fb.article_id
+        FROM business_matching_feedback fb
+        JOIN batch_articles b ON b.article_id = fb.article_id
+       WHERE fb.label IN ('relevant', 'irrelevant')
+       ORDER BY fb.article_id, fb.created_at DESC, fb.id DESC
+    ), candidate_article_terms AS (
+      SELECT DISTINCT ON (
+               c.article_id,
+               c.capability_id,
+               lower(regexp_replace(trim(c.phrase), '[[:space:][:punct:]]', '', 'g'))
+             )
+             c.article_id, c.capability_id,
+             lower(regexp_replace(trim(c.phrase), '[[:space:][:punct:]]', '', 'g')) AS normalized_term,
+             c.phrase, c.evidence_source, c.evidence,
+             a.title, s.name AS source_name
+        FROM business_keyword_candidates c
+        JOIN latest_feedback l ON l.feedback_id = c.feedback_id
+        JOIN articles a ON a.id = c.article_id
+        LEFT JOIN sources s ON s.id = a.source_id
+       WHERE c.kind = 'positive'
+       ORDER BY c.article_id, c.capability_id,
+                lower(regexp_replace(trim(c.phrase), '[[:space:][:punct:]]', '', 'g')),
+                c.phrase, c.id
+    ), grouped_terms AS (
+      SELECT capability_id, normalized_term, min(phrase) AS term,
+             count(*)::int AS source_count,
+             jsonb_agg(jsonb_build_object(
+               'articleId', article_id,
+               'title', title,
+               'sourceName', source_name,
+               'phrase', phrase,
+               'evidenceSource', evidence_source,
+               'evidence', evidence
+             ) ORDER BY title, article_id) AS sources
+        FROM candidate_article_terms
+       GROUP BY capability_id, normalized_term
+    ), filtered AS (
+      SELECT *, count(*) OVER()::int AS total
+        FROM grouped_terms
+       ORDER BY term, capability_id
+       LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}
+    )
+    SELECT capability_id AS "capabilityId", normalized_term AS "normalizedTerm", term,
+           source_count AS "sourceCount", sources, total
+      FROM filtered`;
+  return {
+    metric: "positiveCandidateTerms" as const,
+    page,
+    pageSize,
+    total: Number(rows[0]?.total ?? 0),
+    terms: rows.map((row) => ({
+      capabilityId: row.capabilityId,
+      capabilityName: capabilityNames.get(row.capabilityId) ?? row.capabilityId,
+      normalizedTerm: row.normalizedTerm,
+      term: row.term,
+      sourceCount: Number(row.sourceCount),
+      sources: row.sources ?? [],
+    })),
   };
 }
 

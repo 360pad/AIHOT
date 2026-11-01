@@ -30,8 +30,15 @@ type FlowData = {
   recentBulkReview: { createdAt: string; days: number; markedCount: number; databaseCount: number; labels: { relevant: number; irrelevant: number }; batches: Array<{ slot: string; count: number }> } | null;
 };
 
-type DrillMetric = "samples" | "relevant" | "irrelevant" | "formalHit" | "conflict" | "consistent" | "noFormalHit" | "formalAndCandidate" | "formalOnly" | "candidateOnly" | "neither" | "candidateSamples" | "noCandidateSamples" | "negativeCandidateSamples" | "irrelevantWithoutCandidate" | "lowScoreIrrelevant";
-type Drilldown = { metric: DrillMetric; page: number; pageSize: number; total: number; rows: Array<{ articleId: string; title: string; openingTime: string | null; amount: string | null }> };
+type DrillMetric = "samples" | "relevant" | "irrelevant" | "formalHit" | "conflict" | "consistent" | "noFormalHit" | "formalAndCandidate" | "formalOnly" | "candidateOnly" | "neither" | "candidateSamples" | "positiveRelevantCandidateSamples" | "positiveCandidateTerms" | "noCandidateSamples" | "negativeCandidateSamples" | "irrelevantWithoutCandidate" | "lowScoreIrrelevant";
+type Drilldown = {
+  metric: DrillMetric;
+  page: number;
+  pageSize: number;
+  total: number;
+  rows?: Array<{ articleId: string; title: string; sourceName?: string; publishedAt?: string | null; discoveredAt?: string | null; aiRelevance?: string | null; aiScore?: number | null; aiBusinessScore?: number; candidateTerms?: Array<{ kind: string; phrase: string; evidenceSource: string; evidence: string | null }>; openingTime: string | null; amount: string | null }>;
+  terms?: Array<{ capabilityId: string; capabilityName: string; term: string; sourceCount: number; sources: Array<{ articleId: string; title: string; sourceName?: string; phrase: string; evidenceSource: string; evidence: string }> }>;
+};
 
 const DRILL_TITLES: Record<DrillMetric, string> = {
   samples: "已标注样本",
@@ -46,6 +53,8 @@ const DRILL_TITLES: Record<DrillMetric, string> = {
   candidateOnly: "仅有 AI 候选词文档",
   neither: "没有关键词变化的样本",
   candidateSamples: "AI 候选词来源文档",
+  positiveRelevantCandidateSamples: "人工判相关且有正向 AI 候选词的招标文章",
+  positiveCandidateTerms: "正向新词候选词条及来源文章",
   noCandidateSamples: "未形成 AI 候选词文档",
   negativeCandidateSamples: "负向候选来源文档",
   irrelevantWithoutCandidate: "未形成负向候选的不相关文档",
@@ -81,7 +90,7 @@ function FlowCount({ value, unit, paused = false, drill }: { value: number; unit
   const context = useContext(FlowDrillContext);
   const content = <><b><AnimatedCount value={value} paused={paused} /></b>{unit}</>;
   return drill && context
-    ? <Link className="kg-flow-count kg-flow-count-link" to={context.href(drill)} aria-label={`查看${fmt(value)}${unit}对应文章`}>{content}</Link>
+    ? <Link className="kg-flow-count kg-flow-count-link" to={context.href(drill)} aria-label={`查看${fmt(value)}${unit}详情`}>{content}</Link>
     : <span className="kg-flow-count">{content}</span>;
 }
 
@@ -282,21 +291,41 @@ function QueueLink({ to, children }: { to: string; children: ReactNode }) {
 
 function FlowDrilldownDialog({ slot, data }: { slot: string; data: Drilldown }) {
   const pageCount = Math.max(1, Math.ceil(data.total / data.pageSize));
+  const showsCandidateDetails = data.metric === "positiveRelevantCandidateSamples";
+  const showsCandidateTerms = data.metric === "positiveCandidateTerms";
   const href = (page: number) => `?${new URLSearchParams({ slot, drill: data.metric, page: String(page) })}`;
   return <div className="kg-drill-backdrop" role="presentation">
-    <section className="kg-drill-dialog" role="dialog" aria-modal="true" aria-labelledby="kg-drill-title">
+    <section className={`kg-drill-dialog${showsCandidateDetails ? " kg-drill-dialog-candidates" : ""}${showsCandidateTerms ? " kg-drill-dialog-terms" : ""}`} role="dialog" aria-modal="true" aria-labelledby="kg-drill-title">
       <header><h2 id="kg-drill-title">{DRILL_TITLES[data.metric]}</h2><Link to={`?slot=${encodeURIComponent(slot)}`} aria-label="关闭文档列表">×</Link></header>
       <div className="kg-drill-table-wrap">
         <table>
-          <thead><tr><th>序号</th><th>标题</th><th>开标时间</th><th>金额</th></tr></thead>
-          <tbody>{data.rows.map((row, index) => <tr key={row.articleId}>
-            <td>{(data.page - 1) * data.pageSize + index + 1}</td>
-            <td><Link className="text-accent hover:underline" to={`/admin/review?articleId=${encodeURIComponent(row.articleId)}`}>{row.title}</Link></td>
-            <td>{row.openingTime ?? "未识别"}</td>
-            <td>{row.amount ?? "未识别"}</td>
-          </tr>)}</tbody>
+          {showsCandidateTerms ? <>
+            <thead><tr><th>序号</th><th>新词词条</th><th>业务能力</th><th>来源文章与 AI 提取依据</th></tr></thead>
+            <tbody>{(data.terms ?? []).map((term, index) => <tr key={`${term.capabilityId}-${term.term}`}>
+              <td>{(data.page - 1) * data.pageSize + index + 1}</td>
+              <td>{term.term}<small className="mt-1 block font-normal text-ink-4">{term.sourceCount} 篇来源文章</small></td>
+              <td>{term.capabilityName}</td>
+              <td><div className="kg-drill-term-sources">{term.sources.map((source) => <div key={source.articleId}>
+                <Link className="text-accent hover:underline" to={`/admin/review?articleId=${encodeURIComponent(source.articleId)}`}>{source.title}</Link>
+                <small>{source.sourceName || "信源未记录"} · {source.phrase} · {source.evidenceSource === "title" ? "标题" : "正文"}依据：“{source.evidence}”</small>
+              </div>)}</div></td>
+            </tr>)}</tbody>
+          </> : <>
+            <thead><tr><th>序号</th><th>招标信息</th>{showsCandidateDetails && <><th>人工判读</th><th>AI 结论 / 分数</th><th>AI 提取词与原文依据</th></>}<th>开标时间</th><th>金额</th></tr></thead>
+            <tbody>{(data.rows ?? []).map((row, index) => <tr key={row.articleId}>
+              <td>{(data.page - 1) * data.pageSize + index + 1}</td>
+              <td><Link className="text-accent hover:underline" to={`/admin/review?articleId=${encodeURIComponent(row.articleId)}`}>{row.title}</Link>{showsCandidateDetails && <small className="mt-1 block font-normal text-ink-4">{row.sourceName || "信源未记录"} · {row.publishedAt ? `发布 ${new Date(row.publishedAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false })}` : `采集 ${row.discoveredAt ? new Date(row.discoveredAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false }) : "时间未记录"}`}</small>}</td>
+              {showsCandidateDetails && <>
+                <td>人工判定相关</td>
+                <td>{row.aiRelevance === "pass" ? "相关" : row.aiRelevance === "block" ? "不相关" : row.aiRelevance === "unknown" ? "待复核" : "未判读"}<small className="mt-1 block font-normal text-ink-4">业务 {row.aiBusinessScore !== undefined && row.aiBusinessScore >= 0 ? row.aiBusinessScore : "—"} · 总分 {row.aiScore ?? "—"}</small></td>
+                <td>{row.candidateTerms?.length ? row.candidateTerms.map((term) => <div key={`${term.kind}-${term.phrase}`} className="mb-2 last:mb-0"><span className="inline-flex rounded-full bg-ok-soft px-2 py-0.5 text-[11px] font-medium text-ok">+ {term.phrase}</span>{term.evidence && <small className="mt-1 block whitespace-normal font-normal text-ink-4">{term.evidenceSource === "title" ? "标题" : "正文"}依据：“{term.evidence}”</small>}</div>) : <span className="text-ink-4">暂无已汇总词条</span>}</td>
+              </>}
+              <td>{row.openingTime ?? "未识别"}</td>
+              <td>{row.amount ?? "未识别"}</td>
+            </tr>)}</tbody>
+          </>}
         </table>
-        {!data.rows.length && <p className="kg-drill-empty">暂无文档</p>}
+        {showsCandidateTerms ? !data.terms?.length && <p className="kg-drill-empty">暂无词条</p> : !data.rows?.length && <p className="kg-drill-empty">暂无文档</p>}
       </div>
       {pageCount > 1 && <footer><span>第 {data.page} / {pageCount} 页</span><nav>
         <Link aria-disabled={data.page <= 1} to={href(Math.max(1, data.page - 1))}>上一页</Link>
@@ -323,6 +352,7 @@ export default function KeywordGovernanceFlow({ loaderData }: Route.ComponentPro
   const negativeCandidateSamples = Math.min(humanIrrelevant, Number(flow.negativeCandidateSamples ?? 0));
   const irrelevantWithoutCandidate = Math.max(0, humanIrrelevant - negativeCandidateSamples);
   const allCandidates = positiveCandidates + negativeCandidates;
+  const positiveRelevantCandidateSamples = Number(flow.positiveRelevantCandidateSamples ?? 0);
   const candidateSamples = Number(flow.candidateSamples ?? 0);
   const noCandidateSamples = Math.max(0, marked - candidateSamples);
   const formalAndCandidateSamples = Number(flow.formalAndCandidateSamples ?? 0);
@@ -416,9 +446,9 @@ export default function KeywordGovernanceFlow({ loaderData }: Route.ComponentPro
           <ChoiceFork count={3} />
           <div className="kg-ai-outcomes">
             <div className="kg-path-card">
-              <span className="kg-path-label kg-label-ok">有，且人工判为相关</span>
+              <span className="kg-path-label kg-label-ok">有，且人工判为相关 <FlowCount value={positiveRelevantCandidateSamples} unit="篇招标" paused={paused} drill="positiveRelevantCandidateSamples" /></span>
               <Arrow />
-              <Outcome kind="positive" title="正向新词候选"><small>本批 <AnimatedCount value={positiveCandidates} paused={paused} /> 个词条 · 按词合并统计</small></Outcome>
+              <Outcome kind="positive" title="正向新词候选"><small>本批 <FlowCount value={positiveCandidates} unit="个词条" paused={paused} drill="positiveCandidateTerms" /> · 按词合并统计</small></Outcome>
             </div>
             <div className="kg-path-card">
               <span className="kg-path-label kg-label-muted">未形成可核验 AI 候选 <FlowCount value={noCandidateSamples} unit="篇" paused={paused} drill="noCandidateSamples" /></span>

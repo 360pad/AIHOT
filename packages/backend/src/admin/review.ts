@@ -16,6 +16,7 @@ type ReviewDbRow = {
   article_id: string; title: string; url: string; source_name: string; source_tier: string; discovered_at: Date; published_at: Date | null;
   body_status: string; excerpt: string | null; body_preview: string; review_text: string; title_zh: string | null; summary_zh: string | null; category: string | null;
   positive_hits: string[]; negative_hits: string[]; prefilter_402_failed: boolean;
+  ai_keyword_candidates?: Array<{ kind: string; phrase: string; evidence_source: string; evidence: string | null }>;
   relevance: string | null; score: number | null; selected: boolean | null; model: string | null; prompt_version: string | null;
   published_selected: boolean; manual_selected: boolean; override_version: number; publication_visibility: string | null;
   reason_zh: string | null; analysis_output: Record<string, any> | null;
@@ -461,12 +462,32 @@ export async function listArticleReviews(input: { q?: string; filter?: string; h
       total = Math.min(total, LOW_NO_KEYWORD_DAILY_SAMPLE_LIMIT);
     }
   }
+  const candidateRows = articleId && rows.length ? await sql<any[]>`
+    WITH latest_feedback AS (
+      SELECT DISTINCT ON (article_id) id AS feedback_id, article_id
+        FROM business_matching_feedback
+       WHERE article_id = ANY(${rows.map((row) => row.article_id)}::text[]) AND label IN ('relevant', 'irrelevant')
+       ORDER BY article_id, created_at DESC, id DESC
+    )
+    SELECT DISTINCT ON (c.article_id, c.kind, c.phrase)
+           c.article_id, c.kind, c.phrase, c.evidence_source, c.evidence
+      FROM business_keyword_candidates c
+      JOIN latest_feedback l ON l.feedback_id = c.feedback_id
+     ORDER BY c.article_id, c.kind, c.phrase, c.evidence_source, c.evidence` : [];
+  const keywordCandidatesByArticle = new Map<string, ReviewDbRow["ai_keyword_candidates"]>();
+  for (const row of candidateRows) keywordCandidatesByArticle.set(row.article_id, [...(keywordCandidatesByArticle.get(row.article_id) ?? []), {
+    kind: row.kind,
+    phrase: row.phrase,
+    evidence_source: row.evidence_source,
+    evidence: row.evidence,
+  }]);
   const positiveByTerm = new Map<string, KeywordRule[]>();
   const negativeByTerm = new Map<string, KeywordRule[]>();
   for (const rule of rules.positive) positiveByTerm.set(rule.term.toLocaleLowerCase(), [...(positiveByTerm.get(rule.term.toLocaleLowerCase()) ?? []), rule]);
   for (const rule of rules.negative) negativeByTerm.set(rule.term.toLocaleLowerCase(), [...(negativeByTerm.get(rule.term.toLocaleLowerCase()) ?? []), rule]);
   const resultRows = rows.map(({ total: _total, business_score: _businessScore, positive_hits, negative_hits, review_text, ...row }) => ({
     ...row,
+    ai_keyword_candidates: keywordCandidatesByArticle.get(row.article_id) ?? [],
     procurementFacts: procurementFacts(review_text, row.analysis_output),
     positiveHits: positive_hits.flatMap((hit) => positiveByTerm.get(hit) ?? []),
     negativeHits: negative_hits.flatMap((hit) => negativeByTerm.get(hit) ?? []),
